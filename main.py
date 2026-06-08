@@ -8,7 +8,6 @@ from dotenv import load_dotenv
 from src.scraper.cnn_fetcher import get_cnn_entertainment_news
 from src.analyzer.llm_analyzer import generate_content_from_article
 from src.image_editor.image_processor import create_facebook_post
-from src.storage.drive_uploader import upload_image_to_drive
 from src.telegram.telegram_reporter import send_telegram_message
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -43,8 +42,8 @@ def job():
         image_url = item["image_url"]
         content = generate_content_from_article(title, item.get("description", ""))
         
-        os.makedirs("output", exist_ok=True)
-        output_filename = f"output/post_{int(time.time())}.jpg"
+        os.makedirs("Generated-Images", exist_ok=True)
+        output_filename = f"Generated-Images/post_{int(time.time())}.jpg"
         branding = os.getenv("BRANDING_TEXT", "Celebrity Buzz USA")
         
         processed_img_path = create_facebook_post(
@@ -56,11 +55,6 @@ def job():
             logo_path="assets/logo/logo.png"
         )
         
-        folder_id = os.getenv("GOOGLE_DRIVE_FOLDER_ID")
-        public_url = "Not Uploaded"
-        if folder_id and processed_img_path:
-            public_url = upload_image_to_drive(processed_img_path, folder_id)
-            
         save_processed_trend(title)
         logging.info(f"Finished processing {title}.")
         
@@ -69,7 +63,7 @@ def job():
             f"✅ <b>New Facebook Poster Generated</b>\n\n"
             f"📰 <b>News Title:</b> {title}\n"
             f"🕒 <b>Time:</b> {generation_time}\n"
-            f"🔗 <b>Drive Link:</b> <a href='{public_url}'>View Image</a>"
+            f"📁 <b>Location:</b> Saved to GitHub `Generated-Images` folder"
         )
         send_telegram_message(report)
         break

@@ -39,5 +39,5 @@ jobs:
       - name: Commit Processed News state
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "chore: update processed news state"
-          file_pattern: "output/processed_news.txt"
+          commit_message: "chore: update processed news state and save poster"
+          file_pattern: "output/processed_news.txt Generated-Images/*.jpg"
