@@ -42,8 +42,8 @@ def job():
         image_url = item["image_url"]
         content = generate_content_from_article(title, item.get("description", ""))
         
-        os.makedirs("Generated-Images", exist_ok=True)
-        output_filename = f"Generated-Images/post_{int(time.time())}.jpg"
+        os.makedirs("output", exist_ok=True)
+        output_filename = f"output/post_{int(time.time())}.jpg"
         branding = os.getenv("BRANDING_TEXT", "Celebrity Buzz USA")
         
         processed_img_path = create_facebook_post(
@@ -62,8 +62,7 @@ def job():
         report = (
             f"✅ <b>New Facebook Poster Generated</b>\n\n"
             f"📰 <b>News Title:</b> {title}\n"
-            f"🕒 <b>Time:</b> {generation_time}\n"
-            f"📁 <b>Location:</b> Saved to GitHub `Generated-Images` folder"
+            f"🕒 <b>Time:</b> {generation_time}"
         )
         
         if processed_img_path:
