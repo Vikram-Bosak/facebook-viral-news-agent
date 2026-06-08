@@ -2,9 +2,8 @@ name: Facebook Viral News Agent
 
 on:
   schedule:
-    # Runs at 7 AM, 10 AM, 1 PM, 4 PM, 7 PM, 10 PM EST
-    # EST is UTC-5, so: 12, 15, 18, 21, 0, 3 UTC
-    - cron: '0 0,3,12,15,18,21 * * *'
+    # Runs 24x7: Every hour on the hour
+    - cron: '0 * * * *'
   workflow_dispatch: # Allows manual trigger
 
 jobs:
