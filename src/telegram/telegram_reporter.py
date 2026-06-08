@@ -2,7 +2,7 @@ import os
 import requests
 import logging
 
-def send_telegram_message(text):
+def send_telegram_photo(photo_path, caption):
     bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
     chat_id = os.getenv("TELEGRAM_CHAT_ID")
     
@@ -10,18 +10,16 @@ def send_telegram_message(text):
         logging.warning("TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID missing. Skipping Telegram report.")
         return False
         
-    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-    payload = {
-        "chat_id": chat_id,
-        "text": text,
-        "parse_mode": "HTML"
-    }
+    url = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
     
     try:
-        response = requests.post(url, json=payload)
-        response.raise_for_status()
-        logging.info("Telegram notification sent successfully.")
-        return True
+        with open(photo_path, 'rb') as photo:
+            files = {'photo': photo}
+            data = {'chat_id': chat_id, 'caption': caption, 'parse_mode': 'HTML'}
+            response = requests.post(url, files=files, data=data)
+            response.raise_for_status()
+            logging.info("Telegram photo report sent successfully.")
+            return True
     except Exception as e:
-        logging.error(f"Failed to send Telegram message: {e}")
+        logging.error(f"Failed to send Telegram photo: {e}")
         return False

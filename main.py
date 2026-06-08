@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from src.scraper.cnn_fetcher import get_cnn_entertainment_news
 from src.analyzer.llm_analyzer import generate_content_from_article
 from src.image_editor.image_processor import create_facebook_post
-from src.telegram.telegram_reporter import send_telegram_message
+from src.telegram.telegram_reporter import send_telegram_photo
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -65,7 +65,9 @@ def job():
             f"🕒 <b>Time:</b> {generation_time}\n"
             f"📁 <b>Location:</b> Saved to GitHub `Generated-Images` folder"
         )
-        send_telegram_message(report)
+        
+        if processed_img_path:
+            send_telegram_photo(processed_img_path, report)
         break
 
 if __name__ == "__main__":
