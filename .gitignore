@@ -1,0 +1,9 @@
+venv/
+__pycache__/
+*.pyc
+.env
+service_account.json
+*.jpg
+*.png
+!assets/logo/*.png
+automation.log

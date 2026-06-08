@@ -1,0 +1,47 @@
+name: Facebook Viral News Agent
+
+on:
+  schedule:
+    # Runs at 7 AM, 10 AM, 1 PM, 4 PM, 7 PM, 10 PM EST
+    # EST is UTC-5, so: 12, 15, 18, 21, 0, 3 UTC
+    - cron: '0 0,3,12,15,18,21 * * *'
+  workflow_dispatch: # Allows manual trigger
+
+jobs:
+  generate_news_poster:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+          
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          
+      - name: Setup Google Credentials
+        run: |
+          echo '${{ secrets.GOOGLE_CREDENTIALS_JSON }}' > service_account.json
+          
+      - name: Run News Agent
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GOOGLE_DRIVE_FOLDER_ID: ${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}
+          GOOGLE_APPLICATION_CREDENTIALS: service_account.json
+          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+          BRANDING_TEXT: "Celebrity Buzz USA"
+        run: python main.py
+        
+      - name: Commit Processed News state
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: update processed news state"
+          file_pattern: "output/processed_news.txt"
