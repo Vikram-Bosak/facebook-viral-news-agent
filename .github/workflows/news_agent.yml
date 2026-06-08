@@ -2,8 +2,8 @@ name: Facebook Viral News Agent
 
 on:
   schedule:
-    # Runs 24x7: Every hour on the hour
-    - cron: '0 * * * *'
+    # Runs 6 times a day (every 4 hours)
+    - cron: '0 0,4,8,12,16,20 * * *'
   workflow_dispatch: # Allows manual trigger
 
 jobs:
