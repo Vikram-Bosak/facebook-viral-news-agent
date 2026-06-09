@@ -2,10 +2,18 @@ import os
 import time
 import requests
 import logging
+import random
+import datetime
 from dotenv import load_dotenv
 from openai import OpenAI
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+def random_sleep(max_minutes=20):
+    sleep_time = random.randint(1, max_minutes * 60)
+    logging.info(f"Random Jitter: Sleeping for {sleep_time // 60} minutes and {sleep_time % 60} seconds to simulate human behavior...")
+    time.sleep(sleep_time)
+    logging.info("Woke up from jitter. Proceeding with upload.")
 
 def get_openai_client():
     api_key = os.getenv("NVIDIA_API_KEY")
@@ -111,35 +119,58 @@ def upload_to_facebook(image_path, text_content):
             response.raise_for_status()
             
             result = response.json()
-            logging.info(f"Successfully uploaded to Facebook! Post ID: {result.get('post_id', result.get('id'))}")
-            return True
+            post_id = result.get('post_id', result.get('id'))
+            logging.info(f"Successfully uploaded to Facebook! Post ID: {post_id}")
+            return True, post_id
             
     except Exception as e:
         logging.error(f"Failed to upload to Facebook: {e}")
         if 'response' in locals() and hasattr(response, 'text'):
             logging.error(f"Facebook API Response: {response.text}")
-        return False
+        return False, None
 
-def update_telegram_status(bot_token, chat_id, message_id, new_caption):
-    url = f"https://api.telegram.org/bot{bot_token}/editMessageCaption"
+def send_detailed_report(bot_token, chat_id, message_id, title, facebook_text, post_id):
+    page_id = os.getenv("FACEBOOK_PAGE_ID", "me")
+    
+    # Attempt to construct a public URL
+    # Format typically: https://www.facebook.com/PAGE_ID/posts/POST_ID_WITHOUT_PAGEID
+    url_post_id = post_id.split('_')[-1] if '_' in post_id else post_id
+    public_url = f"https://www.facebook.com/{page_id}/posts/{url_post_id}"
+    
+    current_time = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
+    
+    # Extract hashtags
+    hashtags = " ".join([word for word in facebook_text.split() if word.startswith("#")])
+    
+    report_text = (
+        f"✅ <b>POST PUBLISHED SUCCESSFULLY</b>\n\n"
+        f"📝 <b>Title:</b> {title}\n"
+        f"🏷️ <b>Hashtags:</b> {hashtags if hashtags else 'None'}\n"
+        f"⏱️ <b>Upload Time:</b> {current_time}\n"
+        f"🆔 <b>Post ID:</b> {post_id}\n\n"
+        f"🔗 <b>Public Link:</b> <a href='{public_url}'>Click here to view on Facebook</a>"
+    )
+    
+    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
     data = {
         'chat_id': chat_id,
-        'message_id': message_id,
-        'caption': new_caption,
-        'parse_mode': 'HTML'
+        'text': report_text,
+        'reply_to_message_id': message_id,
+        'parse_mode': 'HTML',
+        'disable_web_page_preview': True
     }
     response = requests.post(url, data=data)
     if response.status_code == 200:
-        logging.info(f"Successfully updated message {message_id} status to PUBLISHED.")
+        logging.info(f"Successfully sent detailed report for message {message_id}.")
     else:
-        logging.error(f"Failed to update message {message_id}: {response.text}")
+        logging.error(f"Failed to send detailed report for message {message_id}: {response.text}")
 
 def monitor_telegram_queue():
-    bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
+    bot_token = os.getenv("TELEGRAM_BOT_TOKEN_AGENT2") or os.getenv("TELEGRAM_BOT_TOKEN")
     chat_id = os.getenv("TELEGRAM_CHAT_ID")
     
     if not bot_token or not chat_id:
-        logging.error("TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID missing.")
+        logging.error("TELEGRAM_BOT_TOKEN_AGENT2 or TELEGRAM_CHAT_ID missing.")
         return
 
     processed = load_processed_messages()
@@ -183,13 +214,12 @@ def monitor_telegram_queue():
             download_path = f"output/downloads/downloaded_{message_id}.jpg"
             
             try:
+                # Random Jitter (Human-like behavior)
+                random_sleep(max_minutes=20)
+                
                 download_telegram_photo(file_id, bot_token, download_path)
                 
                 # Extract TITLE from Telegram caption
-                # Caption format is expected to be:
-                # POST_ID: ...
-                # STATUS: PENDING
-                # TITLE: ...
                 title = "Hollywood Update"
                 for line in caption.split('\n'):
                     if line.startswith("TITLE:"):
@@ -205,10 +235,10 @@ def monitor_telegram_queue():
                     facebook_text = fallback_generate_caption(title)
                 
                 # Upload to Facebook
-                if upload_to_facebook(download_path, facebook_text):
-                    # Update status in Telegram
-                    new_caption = caption.replace("STATUS: PENDING", "STATUS: PUBLISHED")
-                    update_telegram_status(bot_token, chat_id, message_id, new_caption)
+                success, post_id = upload_to_facebook(download_path, facebook_text)
+                if success and post_id:
+                    # Update status in Telegram with Detailed Report
+                    send_detailed_report(bot_token, chat_id, message_id, title, facebook_text, post_id)
                     
                     # Mark as processed locally
                     save_processed_message(message_id)

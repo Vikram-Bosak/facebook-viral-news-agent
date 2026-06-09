@@ -7,3 +7,8 @@ service_account.json
 *.png
 !assets/logo/*.png
 automation.log
+credentials.json
+set_secrets.sh
+service_account.json
+telegram_updates.json
+.env
