@@ -16,13 +16,21 @@ Title: {title}
 Description: {description}
 
 Your task:
-1. Understand the main topic.
-2. Extract the most important information.
+1. Understand the main topic and its emotional tone.
+2. Choose ONE of the following styles that best fits the news:
+   - "Meme Style"
+   - "Funny Style"
+   - "Emotional Style"
+   - "Sad Style"
+   - "Breaking News Style"
+   - "Celebrity Reaction Style"
+   - "Comparison Style"
+   - "Storytelling Style"
 3. Generate a click-worthy 'headline' for a Facebook Audience (American English).
 4. Generate a viral 'hook_text'.
 5. Highlight 1 to 3 important keywords in both headline and hook_text by wrapping them in asterisks like *this*.
 
-Respond STRICTLY in JSON format with two keys: "headline" and "hook_text". Do not include markdown formatting or backticks around the JSON.
+Respond STRICTLY in JSON format with three keys: "headline", "hook_text", and "style". Do not include markdown formatting or backticks around the JSON.
 """
     try:
         completion = client.chat.completions.create(
@@ -52,5 +60,6 @@ Respond STRICTLY in JSON format with two keys: "headline" and "hook_text". Do no
         logging.error(f"LLM API failed: {e}")
         return {
             "headline": f"Shocking Update on *{title}*!",
-            "hook_text": "The entire internet is talking about this. What do you think about the latest drama?"
+            "hook_text": "The entire internet is talking about this. What do you think about the latest drama?",
+            "style": "Breaking News Style"
         }

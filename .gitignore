@@ -12,3 +12,7 @@ set_secrets.sh
 service_account.json
 telegram_updates.json
 .env
+fb_accounts.json
+updates_*.json
+test_*.py
+output/downloads/

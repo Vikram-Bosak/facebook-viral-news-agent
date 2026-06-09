@@ -40,26 +40,38 @@ def job():
         logging.info(f"Processing new article: {title}")
         
         image_url = item["image_url"]
-        content = generate_content_from_article(title, item.get("description", ""))
+        description = item.get("description", "")
         
         os.makedirs("output", exist_ok=True)
-        output_filename = f"output/post_{int(time.time())}.jpg"
+        generation_time = datetime.now(pytz.timezone('America/New_York')).strftime('%Y%m%d_%H%M%S')
+        post_id = f"{generation_time}_{int(time.time())}"
+        
+        ai_data = generate_content_from_article(title, description)
+        headline = ai_data.get("headline", title)
+        hook_text = ai_data.get("hook_text", description)
+        style = ai_data.get("style", "Breaking News Style")
         branding = os.getenv("BRANDING_TEXT", "Celebrity Buzz USA")
         
+        logging.info(f"AI Selected Style: {style}")
+        logging.info(f"Headline: {headline}")
+        logging.info(f"Hook: {hook_text}")
+        
+        poster_path = f"output/post_{post_id}.jpg"
         processed_img_path = create_facebook_post(
             image_url, 
-            headline=content["headline"],
-            hook_text=content["hook_text"],
-            branding=branding, 
-            output_path=output_filename,
+            headline=headline,
+            hook_text=hook_text,
+            branding=branding,
+            style=style,
+            output_path=poster_path,
             logo_path="assets/logo/logo.png"
         )
         
+        if not processed_img_path:
+            continue
+            
         save_processed_trend(title)
         logging.info(f"Finished processing {title}.")
-        
-        generation_time = datetime.now(pytz.timezone('America/New_York')).strftime('%Y%m%d_%H%M%S')
-        post_id = f"{generation_time}_{int(time.time())}"
         
         # New Telegram Metadata Format
         report = (

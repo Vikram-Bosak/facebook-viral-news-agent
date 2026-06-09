@@ -47,49 +47,43 @@ def draw_gradient_overlay(img):
         
     img.paste(overlay, (0, 0), overlay)
 
-def create_facebook_post(image_url, headline, hook_text, branding="Celebrity Buzz USA", output_path="output.jpg", logo_path="logo.png"):
+def create_facebook_post(image_url, headline, hook_text, branding="Celebrity Buzz USA", style="Breaking News Style", output_path="output.jpg", logo_path="logo.png"):
     img = download_image(image_url)
     if not img:
         img = Image.new('RGB', (1080, 1080), color=(30, 30, 30))
     else:
         img = img.convert('RGB')
-        width, height = img.size
-        min_dim = min(width, height)
-        left = (width - min_dim) / 2
-        top = (height - min_dim) / 2
-        right = (width + min_dim) / 2
-        bottom = (height + min_dim) / 2
-        img = img.crop((left, top, right, bottom))
-        img = img.resize((1080, 1080), Image.Resampling.LANCZOS)
         
-    draw_gradient_overlay(img)
+    width, height = img.size
+    min_dim = min(width, height)
+    left = (width - min_dim) / 2
+    top = (height - min_dim) / 2
+    right = (width + min_dim) / 2
+    bottom = (height + min_dim) / 2
+    img = img.crop((left, top, right, bottom))
+    img = img.resize((1080, 1080), Image.Resampling.LANCZOS)
     
+    # Emotional/Sad Style: Desaturate the image
+    if style in ["Emotional Style", "Sad Style"]:
+        enhancer = ImageEnhance.Color(img)
+        img = enhancer.enhance(0.2)
+        enhancer_brightness = ImageEnhance.Brightness(img)
+        img = enhancer_brightness.enhance(0.7)
+
     draw = ImageDraw.Draw(img)
     
-    border_inset = 15
-    border_width = 3
-    draw.rectangle(
-        [border_inset, border_inset, 1080 - border_inset, 1080 - border_inset],
-        outline=(255, 255, 255, 180),
-        width=border_width
-    )
-    
-    main_font = get_font(56) # Slightly larger for headline
-    hook_font = get_font(40) # Smaller for hook
+    main_font = get_font(56)
+    hook_font = get_font(40)
     brand_font = get_font(30)
     
-    margin = 60
-    max_width = 1080 - (margin * 2)
-    
-    def get_lines(text, font):
+    def get_lines(text, font, max_w):
         words = text.split()
-        lines = []
-        current_line = []
+        lines, current_line = [], []
         for word in words:
             test_line = current_line + [word]
             clean_text = " ".join(test_line).replace('*', '')
             bbox = draw.textbbox((0, 0), clean_text, font=font)
-            if (bbox[2] - bbox[0]) <= max_width:
+            if (bbox[2] - bbox[0]) <= max_w:
                 current_line.append(word)
             else:
                 if current_line: lines.append(current_line)
@@ -97,94 +91,97 @@ def create_facebook_post(image_url, headline, hook_text, branding="Celebrity Buz
         if current_line: lines.append(current_line)
         return lines
 
-    headline_lines = get_lines(headline, main_font)
-    hook_lines = get_lines(hook_text, hook_font)
-
-    line_spacing = 20
-    h_bbox_main = draw.textbbox((0, 0), "A", font=main_font)
-    line_height_main = (h_bbox_main[3] - h_bbox_main[1]) + line_spacing
-    
-    h_bbox_hook = draw.textbbox((0, 0), "A", font=hook_font)
-    line_height_hook = (h_bbox_hook[3] - h_bbox_hook[1]) + line_spacing
-
-    total_text_height = (len(headline_lines) * line_height_main) + (len(hook_lines) * line_height_hook) + 40 # 40px gap
-    
-    start_y = 960 - total_text_height
-    
-    def draw_lines(lines, font, y_pos, line_height):
-        is_highlight = False 
+    def draw_text_with_outline(lines, font, y_pos, line_height, text_color, outline_color, stroke_width=3, center=True, is_impact=False):
         for line_words in lines:
             clean_line = " ".join(line_words).replace('*', '')
             bbox = draw.textbbox((0, 0), clean_line, font=font)
             line_width = bbox[2] - bbox[0]
+            x = (1080 - line_width) / 2 if center else 60
             
-            x = (1080 - line_width) / 2
-            
+            is_highlight = False
             for i, word in enumerate(line_words):
                 if word.startswith('*'):
                     is_highlight = True
                     word = word[1:]
-                
                 end_highlight = False
                 if word.endswith('*'):
                     end_highlight = True
                     word = word[:-1]
                     
-                color = "#FFD700" if is_highlight else "#FFFFFF"
-                draw.text((x + 3, y_pos + 3), word, font=font, fill=(0, 0, 0, 200))
-                draw.text((x, y_pos), word, font=font, fill=color)
+                current_color = "#FFD700" if is_highlight and not is_impact else text_color
+                if is_impact:
+                    current_color = "#FFD700"
+                    outline_color = "#000000"
+                
+                # Draw Outline
+                if outline_color:
+                    draw.text((x-stroke_width, y_pos-stroke_width), word, font=font, fill=outline_color)
+                    draw.text((x+stroke_width, y_pos-stroke_width), word, font=font, fill=outline_color)
+                    draw.text((x-stroke_width, y_pos+stroke_width), word, font=font, fill=outline_color)
+                    draw.text((x+stroke_width, y_pos+stroke_width), word, font=font, fill=outline_color)
+                
+                draw.text((x, y_pos), word, font=font, fill=current_color)
                 
                 bbox_word = draw.textbbox((0, 0), word, font=font)
                 x += (bbox_word[2] - bbox_word[0])
-                
-                if end_highlight:
-                    is_highlight = False
-                    
+                if end_highlight: is_highlight = False
                 if i < len(line_words) - 1:
                     space_bbox = draw.textbbox((0, 0), " ", font=font)
                     x += (space_bbox[2] - space_bbox[0])
-                    
             y_pos += line_height
         return y_pos
 
-    start_y = draw_lines(headline_lines, main_font, start_y, line_height_main)
-    start_y += 40 # gap
-    draw_lines(hook_lines, hook_font, start_y, line_height_hook)
+    # Apply Style Logic
+    if style in ["Meme Style", "Funny Style", "Celebrity Reaction Style", "Comparison Style"]:
+        headline_lines = get_lines(headline, main_font, 960)
+        hook_lines = get_lines(hook_text, hook_font, 960)
         
+        # Impact Meme Style Layout
+        draw_text_with_outline(headline_lines, main_font, 80, 60, "#FFD700", "#000000", stroke_width=4, is_impact=True)
+        draw_text_with_outline(hook_lines, hook_font, 1080 - 150 - (len(hook_lines) * 45), 45, "#FFFFFF", "#000000", stroke_width=3)
+        
+    elif style in ["Storytelling Style", "Emotional Style", "Sad Style"]:
+        # Heavy Bottom Gradient
+        draw_gradient_overlay(img)
+        headline_lines = get_lines(headline, main_font, 960)
+        hook_lines = get_lines(hook_text, hook_font, 960)
+        
+        total_h = (len(headline_lines) * 60) + (len(hook_lines) * 45) + 40
+        start_y = 1080 - 150 - total_h
+        
+        start_y = draw_text_with_outline(headline_lines, main_font, start_y, 60, "#FFFFFF", None, center=False)
+        start_y += 20
+        draw_text_with_outline(hook_lines, hook_font, start_y, 45, "#CCCCCC", None, center=False)
+        
+    else: # Breaking News Style (Default)
+        headline_lines = get_lines(headline, main_font, 960)
+        headline_h = len(headline_lines) * 60 + 60
+        
+        # Top Yellow Banner
+        draw.rectangle([0, 0, 1080, headline_h], fill="#FFD700")
+        draw_text_with_outline(headline_lines, main_font, 30, 60, "#000000", None)
+        
+        hook_lines = get_lines(hook_text, hook_font, 960)
+        hook_h = len(hook_lines) * 45 + 60
+        
+        # Bottom Black Banner
+        draw.rectangle([0, 1080 - hook_h - 100, 1080, 1080], fill="#000000")
+        draw_text_with_outline(hook_lines, hook_font, 1080 - hook_h - 70, 45, "#FFFFFF", None)
+
+    # Branding Logo
     if logo_path and os.path.exists(logo_path):
         try:
             logo = Image.open(logo_path).convert("RGBA")
-            logo_size = 60
-            logo.thumbnail((logo_size, logo_size), Image.Resampling.LANCZOS)
-            
-            branding_bbox = draw.textbbox((0, 0), branding, font=brand_font)
-            bw = branding_bbox[2] - branding_bbox[0]
-            
-            total_width = logo.width + 15 + bw
-            start_x = (1080 - total_width) / 2
-            ly = 1080 - 70 - int((logo.height - (branding_bbox[3] - branding_bbox[1])) / 2)
-            img.paste(logo, (int(start_x), ly), logo)
-            
-            tx = start_x + logo.width + 15
-            ty = 1080 - 70
-            draw.text((tx + 2, ty + 2), branding, font=brand_font, fill=(0, 0, 0, 200))
-            draw.text((tx, ty), branding, font=brand_font, fill=(220, 220, 220))
-        except Exception as e:
-            logging.error(f"Failed to add logo: {e}")
-            branding_bbox = draw.textbbox((0, 0), branding, font=brand_font)
-            bw = branding_bbox[2] - branding_bbox[0]
-            bx = (1080 - bw) / 2
-            draw.text((bx + 2, 1080 - 70 + 2), branding, font=brand_font, fill=(0, 0, 0, 200))
-            draw.text((bx, 1080 - 70), branding, font=brand_font, fill=(220, 220, 220))
+            logo.thumbnail((50, 50), Image.Resampling.LANCZOS)
+            img.paste(logo, (40, 1080 - 70), logo)
+            draw.text((100, 1080 - 60), branding, font=brand_font, fill=(200, 200, 200))
+        except Exception:
+            draw.text((40, 1080 - 60), branding, font=brand_font, fill=(200, 200, 200))
     else:
-        branding_bbox = draw.textbbox((0, 0), branding, font=brand_font)
-        bw = branding_bbox[2] - branding_bbox[0]
-        bx = (1080 - bw) / 2
-        draw.text((bx + 2, 1080 - 70 + 2), branding, font=brand_font, fill=(0, 0, 0, 200))
-        draw.text((bx, 1080 - 70), branding, font=brand_font, fill=(220, 220, 220))
+        draw.text((40, 1080 - 60), branding, font=brand_font, fill=(200, 200, 200))
         
     img.save(output_path)
-    logging.info(f"Image saved to {output_path}")
+    logging.info(f"Image saved to {output_path} with style: {style}")
     return output_path
 
 if __name__ == "__main__":
