@@ -8,7 +8,7 @@ def send_telegram_photo(photo_path, caption):
     
     if not bot_token or not chat_id:
         logging.warning("TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID missing. Skipping Telegram report.")
-        return False
+        return None
         
     url = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
     
@@ -19,7 +19,8 @@ def send_telegram_photo(photo_path, caption):
             response = requests.post(url, files=files, data=data)
             response.raise_for_status()
             logging.info("Telegram photo report sent successfully.")
-            return True
+            return response.json()
     except Exception as e:
         logging.error(f"Failed to send Telegram photo: {e}")
-        return False
+        return None
+

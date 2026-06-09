@@ -58,15 +58,21 @@ def job():
         save_processed_trend(title)
         logging.info(f"Finished processing {title}.")
         
-        generation_time = datetime.now(pytz.timezone('America/New_York')).strftime('%Y-%m-%d %I:%M %p EST')
+        generation_time = datetime.now(pytz.timezone('America/New_York')).strftime('%Y%m%d_%H%M%S')
+        post_id = f"{generation_time}_{int(time.time())}"
+        
+        # New Telegram Metadata Format
         report = (
-            f"✅ <b>New Facebook Poster Generated</b>\n\n"
-            f"📰 <b>News Title:</b> {title}\n"
-            f"🕒 <b>Time:</b> {generation_time}"
+            f"POST_ID: {post_id}\n"
+            f"STATUS: PENDING\n"
+            f"TITLE: {title}\n\n"
+            f"🕒 Time: {generation_time}"
         )
         
         if processed_img_path:
-            send_telegram_photo(processed_img_path, report)
+            res = send_telegram_photo(processed_img_path, report)
+            if res and res.get("ok"):
+                logging.info(f"Message sent to Telegram. Message ID: {res['result']['message_id']}")
         break
 
 if __name__ == "__main__":
