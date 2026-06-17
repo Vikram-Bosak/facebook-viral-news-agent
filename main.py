@@ -77,8 +77,10 @@ def job():
         report = (
             f"POST_ID: {post_id}\n"
             f"STATUS: PENDING\n"
-            f"TITLE: {title}\n\n"
-            f"🕒 Time: {generation_time}"
+            f"TITLE: {title}\n"
+            f"SOURCE_URL: {item['link']}\n"
+            f"IMAGE_URL: {item['image_url']}\n\n"
+            f"🕒 Download Time: {generation_time}"
         )
         
         if processed_img_path:

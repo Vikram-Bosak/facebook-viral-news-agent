@@ -36,6 +36,8 @@ jobs:
           FACEBOOK_ACCESS_TOKEN: ${{ secrets.FACEBOOK_ACCESS_TOKEN }}
           FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
           NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
         run: python agent_2_uploader.py
         
       - name: Commit Processed Messages State

@@ -130,26 +130,38 @@ def upload_to_facebook(image_path, text_content):
             logging.error(f"Facebook API Response: {response.text}")
         return False, None
 
-def send_detailed_report(bot_token, chat_id, message_id, title, facebook_text, post_id):
+def send_detailed_report(bot_token, chat_id, message_id, title, facebook_text, post_id, source_url, image_url, image_path):
     page_id = os.getenv("FACEBOOK_PAGE_ID", "me")
+    repo = os.getenv("GITHUB_REPOSITORY", "Vikram-Bosak/facebook-viral-news-agent")
+    run_id = os.getenv("GITHUB_RUN_ID", "unknown")
     
     # Attempt to construct a public URL
-    # Format typically: https://www.facebook.com/PAGE_ID/posts/POST_ID_WITHOUT_PAGEID
     url_post_id = post_id.split('_')[-1] if '_' in post_id else post_id
     public_url = f"https://www.facebook.com/{page_id}/posts/{url_post_id}"
     
-    current_time = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
-    
-    # Extract hashtags
+    # Extract hashtags and SEO Title (Headline)
+    lines = facebook_text.split('\n')
+    seo_title = lines[0] if lines else "Hollywood Update"
     hashtags = " ".join([word for word in facebook_text.split() if word.startswith("#")])
     
+    image_name = os.path.basename(image_path)
+    
     report_text = (
-        f"✅ <b>POST PUBLISHED SUCCESSFULLY</b>\n\n"
-        f"📝 <b>Title:</b> {title}\n"
-        f"🏷️ <b>Hashtags:</b> {hashtags if hashtags else 'None'}\n"
-        f"⏱️ <b>Upload Time:</b> {current_time}\n"
-        f"🆔 <b>Post ID:</b> {post_id}\n\n"
-        f"🔗 <b>Public Link:</b> <a href='{public_url}'>Click here to view on Facebook</a>"
+        f"✅ <b>Upload Successfully Completed</b>\n"
+        f"🖼️ <b>Image Name:</b>\n{image_name}\n\n"
+        f"✅ DOWNLOADED\n"
+        f"✏️ EDITED\n"
+        f"🚀 UPLOADED\n"
+        f"✔️ COMPLETED\n\n"
+        f"📤 Facebook Upload Status: Success\n\n"
+        f"🏷️ <b>SEO Title:</b>\n{seo_title}\n\n"
+        f"📝 <b>Description:</b>\n{facebook_text}\n\n"
+        f"Original Title: {title}\n"
+        f"Source: {source_url}\n"
+        f"Original Image: {image_url}\n\n"
+        f"🔗 <b>Facebook Post URL:</b>\n{public_url}\n\n"
+        f"📦 <b>GitHub Repository:</b>\nhttps://github.com/{repo}\n\n"
+        f"📄 <b>Workflow Run:</b>\nhttps://github.com/{repo}/actions/runs/{run_id}"
     )
     
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
@@ -220,12 +232,17 @@ def monitor_telegram_queue():
                 
                 download_telegram_photo(file_id, bot_token, download_path)
                 
-                # Extract TITLE from Telegram caption
+                # Extract Metadata from Telegram caption
                 title = "Hollywood Update"
+                source_url = "Unknown"
+                image_url = "Unknown"
                 for line in caption.split('\n'):
                     if line.startswith("TITLE:"):
                         title = line.replace("TITLE:", "").strip()
-                        break
+                    elif line.startswith("SOURCE_URL:"):
+                        source_url = line.replace("SOURCE_URL:", "").strip()
+                    elif line.startswith("IMAGE_URL:"):
+                        image_url = line.replace("IMAGE_URL:", "").strip()
                         
                 # Generate Facebook post text
                 facebook_text = ""
@@ -239,7 +256,7 @@ def monitor_telegram_queue():
                 success, post_id = upload_to_facebook(download_path, facebook_text)
                 if success and post_id:
                     # Update status in Telegram with Detailed Report
-                    send_detailed_report(bot_token, chat_id, message_id, title, facebook_text, post_id)
+                    send_detailed_report(bot_token, chat_id, message_id, title, facebook_text, post_id, source_url, image_url, download_path)
                     
                     # Mark as processed locally
                     save_processed_message(message_id)
