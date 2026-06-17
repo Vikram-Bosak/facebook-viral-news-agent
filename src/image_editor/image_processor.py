@@ -1,196 +1,218 @@
 import os
 import requests
 from io import BytesIO
-from PIL import Image, ImageDraw, ImageFont, ImageEnhance
+from PIL import Image, ImageDraw, ImageFont
+from pilmoji import Pilmoji
 import logging
+import cv2
+import numpy as np
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def ensure_font_downloaded(font_url, font_path):
     if not os.path.exists(font_path):
         try:
-            logging.info(f"Downloading font from {font_url}")
             r = requests.get(font_url)
             with open(font_path, 'wb') as f:
                 f.write(r.content)
         except Exception as e:
             logging.error(f"Failed to download font: {e}")
 
-def get_font(size):
-    font_path = "assets/templates/Roboto-Bold.ttf"
-    font_url = "https://github.com/googlefonts/roboto/raw/main/src/hinted/Roboto-Bold.ttf"
+def get_font(size, bold=False):
+    os.makedirs("assets/fonts", exist_ok=True)
+    if bold:
+        font_path = "assets/fonts/Roboto-Bold.ttf"
+        font_url = "https://github.com/googlefonts/roboto/raw/main/src/hinted/Roboto-Bold.ttf"
+    else:
+        font_path = "assets/fonts/Roboto-Regular.ttf"
+        font_url = "https://github.com/googlefonts/roboto/raw/main/src/hinted/Roboto-Regular.ttf"
+        
     ensure_font_downloaded(font_url, font_path)
     try:
         return ImageFont.truetype(font_path, size)
     except Exception:
         return ImageFont.load_default()
 
-def download_image(url):
-    try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
-        response = requests.get(url, headers=headers, timeout=10)
-        response.raise_for_status()
-        return Image.open(BytesIO(response.content))
-    except Exception as e:
-        logging.error(f"Error downloading image: {e}")
-        return None
-
-def draw_gradient_overlay(img):
-    overlay = Image.new('RGBA', img.size, (0, 0, 0, 0))
-    draw = ImageDraw.Draw(overlay)
-    width, height = img.size
-    gradient_start_y = int(height * 0.3) 
-    
-    for y in range(gradient_start_y, height):
-        opacity = int(255 * ((y - gradient_start_y) / (height - gradient_start_y)))
-        draw.line([(0, y), (width, y)], fill=(0, 0, 0, opacity))
-        
-    img.paste(overlay, (0, 0), overlay)
-
-def create_facebook_post(image_url, headline, hook_text, branding="Celebrity Buzz USA", style="Breaking News Style", output_path="output.jpg", logo_path="logo.png"):
-    img = download_image(image_url)
-    if not img:
-        img = Image.new('RGB', (1080, 1080), color=(30, 30, 30))
+def detect_face_and_crop(img, target_w, target_h):
+    """
+    Detects a face in the image and crops it so the face is always in the safe zone.
+    """
+    img_cv = np.array(img)
+    if len(img_cv.shape) == 3 and img_cv.shape[2] == 3:
+        gray = cv2.cvtColor(img_cv, cv2.COLOR_RGB2GRAY)
     else:
-        img = img.convert('RGB')
+        gray = img_cv
         
-    width, height = img.size
-    min_dim = min(width, height)
-    left = (width - min_dim) / 2
-    top = (height - min_dim) / 2
-    right = (width + min_dim) / 2
-    bottom = (height + min_dim) / 2
-    img = img.crop((left, top, right, bottom))
-    img = img.resize((1080, 1080), Image.Resampling.LANCZOS)
+    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=4, minSize=(30, 30))
     
-    # Emotional/Sad Style: Desaturate the image
-    if style in ["Emotional Style", "Sad Style"]:
-        enhancer = ImageEnhance.Color(img)
-        img = enhancer.enhance(0.2)
-        enhancer_brightness = ImageEnhance.Brightness(img)
-        img = enhancer_brightness.enhance(0.7)
+    img_w, img_h = img.size
+    if len(faces) > 0:
+        # Get largest face
+        (x, y, w, h) = sorted(faces, key=lambda f: f[2]*f[3], reverse=True)[0]
+        face_center_x = x + w // 2
+        face_center_y = y + h // 2
+        logging.info("Face detected! Using smart crop.")
+    else:
+        face_center_x = img_w // 2
+        face_center_y = img_h // 2
+        logging.info("No face detected. Using center crop.")
+        
+    # Resize image so the smallest dimension matches the target
+    ratio = max(target_w / img_w, target_h / img_h)
+    new_w = int(img_w * ratio)
+    new_h = int(img_h * ratio)
+    img_resized = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+    
+    # Map face center to new dimensions
+    new_face_center_x = int(face_center_x * ratio)
+    new_face_center_y = int(face_center_y * ratio)
+    
+    # Calculate crop box
+    left = max(0, new_face_center_x - target_w // 2)
+    if left + target_w > new_w: left = new_w - target_w
+    
+    # Vertically position face slightly above center for good composition
+    top = max(0, new_face_center_y - int(target_h * 0.4))
+    if top + target_h > new_h: top = new_h - target_h
+    
+    return img_resized.crop((left, top, left + target_w, top + target_h))
 
-    draw = ImageDraw.Draw(img)
-    
-    main_font = get_font(56)
-    hook_font = get_font(40)
-    brand_font = get_font(30)
-    
-    def get_lines(text, font, max_w):
-        words = text.split()
-        lines, current_line = [], []
-        for word in words:
-            test_line = current_line + [word]
-            clean_text = " ".join(test_line).replace('*', '')
-            bbox = draw.textbbox((0, 0), clean_text, font=font)
-            if (bbox[2] - bbox[0]) <= max_w:
-                current_line.append(word)
-            else:
-                if current_line: lines.append(current_line)
-                current_line = [word]
-        if current_line: lines.append(current_line)
-        return lines
-
-    def draw_text_with_outline(lines, font, y_pos, line_height, text_color, outline_color, stroke_width=3, center=True, is_impact=False):
-        for line_words in lines:
-            clean_line = " ".join(line_words).replace('*', '')
-            bbox = draw.textbbox((0, 0), clean_line, font=font)
-            line_width = bbox[2] - bbox[0]
-            x = (1080 - line_width) / 2 if center else 60
+def create_facebook_post(image_url, headline, hook_text, branding="Celebrity Buzz USA", style="Template Style", output_path="output.jpg", logo_path="logo.png", watermark_path=None):
+    words = hook_text.split()
+    desc_words = []
+    hashtags = []
+    for w in words:
+        if w.startswith('#'):
+            hashtags.append(w)
+        else:
+            desc_words.append(w)
             
-            is_highlight = False
-            for i, word in enumerate(line_words):
-                if word.startswith('*'):
-                    is_highlight = True
-                    word = word[1:]
-                end_highlight = False
-                if word.endswith('*'):
-                    end_highlight = True
-                    word = word[:-1]
-                    
-                current_color = "#FFD700" if is_highlight and not is_impact else text_color
-                if is_impact:
-                    current_color = "#FFD700"
-                    outline_color = "#000000"
-                
-                # Draw Outline
-                if outline_color:
-                    draw.text((x-stroke_width, y_pos-stroke_width), word, font=font, fill=outline_color)
-                    draw.text((x+stroke_width, y_pos-stroke_width), word, font=font, fill=outline_color)
-                    draw.text((x-stroke_width, y_pos+stroke_width), word, font=font, fill=outline_color)
-                    draw.text((x+stroke_width, y_pos+stroke_width), word, font=font, fill=outline_color)
-                
-                draw.text((x, y_pos), word, font=font, fill=current_color)
-                
-                bbox_word = draw.textbbox((0, 0), word, font=font)
-                x += (bbox_word[2] - bbox_word[0])
-                if end_highlight: is_highlight = False
-                if i < len(line_words) - 1:
-                    space_bbox = draw.textbbox((0, 0), " ", font=font)
-                    x += (space_bbox[2] - space_bbox[0])
-            y_pos += line_height
-        return y_pos
+    description = " ".join(desc_words)
+    hashtag_str = " ".join(hashtags)
+    if not hashtag_str:
+        hashtag_str = "#CelebrityBuzz #Hollywood #Entertainment"
 
-    # Apply Style Logic
-    if style in ["Meme Style", "Funny Style", "Celebrity Reaction Style", "Comparison Style"]:
-        headline_lines = get_lines(headline, main_font, 960)
-        hook_lines = get_lines(hook_text, hook_font, 960)
-        
-        # Impact Meme Style Layout
-        draw_text_with_outline(headline_lines, main_font, 80, 60, "#FFD700", "#000000", stroke_width=4, is_impact=True)
-        draw_text_with_outline(hook_lines, hook_font, 1080 - 150 - (len(hook_lines) * 45), 45, "#FFFFFF", "#000000", stroke_width=3)
-        
-    elif style in ["Storytelling Style", "Emotional Style", "Sad Style"]:
-        # Heavy Bottom Gradient
-        draw_gradient_overlay(img)
-        headline_lines = get_lines(headline, main_font, 960)
-        hook_lines = get_lines(hook_text, hook_font, 960)
-        
-        total_h = (len(headline_lines) * 60) + (len(hook_lines) * 45) + 40
-        start_y = 1080 - 150 - total_h
-        
-        start_y = draw_text_with_outline(headline_lines, main_font, start_y, 60, "#FFFFFF", None, center=False)
-        start_y += 20
-        draw_text_with_outline(hook_lines, hook_font, start_y, 45, "#CCCCCC", None, center=False)
-        
-    else: # Breaking News Style (Default)
-        headline_lines = get_lines(headline, main_font, 960)
-        headline_h = len(headline_lines) * 60 + 60
-        
-        # Top Yellow Banner
-        draw.rectangle([0, 0, 1080, headline_h], fill="#FFD700")
-        draw_text_with_outline(headline_lines, main_font, 30, 60, "#000000", None)
-        
-        hook_lines = get_lines(hook_text, hook_font, 960)
-        hook_h = len(hook_lines) * 45 + 60
-        
-        # Bottom Black Banner
-        draw.rectangle([0, 1080 - hook_h - 100, 1080, 1080], fill="#000000")
-        draw_text_with_outline(hook_lines, hook_font, 1080 - hook_h - 70, 45, "#FFFFFF", None)
+    likes = "15,482"
 
-    # Branding Logo
-    if logo_path and os.path.exists(logo_path):
+    # Strict 80/20 Layout
+    # Content: 1060x1420
+    # Header: 110px
+    # Footer: 140px
+    # Remaining: 1170px
+    # Image: 936px (80%)
+    # Text: 234px (20%)
+
+    base_img = Image.new('RGB', (1080, 1440), color="#C6A664")
+    content = Image.new('RGB', (1060, 1420), color="#4A5A84")
+    draw = ImageDraw.Draw(content)
+    
+    header_font = get_font(55, bold=True)
+    credit_font = get_font(30, bold=True)
+    title_font = get_font(35, bold=True)
+    desc_font = get_font(26, bold=False)
+    small_font = get_font(18, bold=False)
+    footer_font = get_font(30, bold=True)
+    
+    with Pilmoji(content) as pilmoji:
+        # 1. Top Header
+        draw.rectangle([0, 0, 1060, 110], fill="#1E243A")
+        header_text = f"🎤 {branding}"
+        pilmoji.text((30, 25), header_text, font=header_font, fill="#FFFFFF")
+        
+        if logo_path and os.path.exists(logo_path):
+            try:
+                logo = Image.open(logo_path).convert("RGBA")
+                lw, lh = logo.size
+                n_w = int(lw * (80/lh))
+                logo = logo.resize((n_w, 80), Image.Resampling.LANCZOS)
+                content.paste(logo, (1060 - n_w - 20, 15), logo)
+            except Exception as e:
+                logging.error(f"Failed to load logo: {e}")
+
+        # 2. Main Image (Height 936)
         try:
-            logo = Image.open(logo_path).convert("RGBA")
-            logo.thumbnail((50, 50), Image.Resampling.LANCZOS)
-            img.paste(logo, (40, 1080 - 70), logo)
-            draw.text((100, 1080 - 60), branding, font=brand_font, fill=(200, 200, 200))
-        except Exception:
-            draw.text((40, 1080 - 60), branding, font=brand_font, fill=(200, 200, 200))
-    else:
-        draw.text((40, 1080 - 60), branding, font=brand_font, fill=(200, 200, 200))
+            if image_url.startswith("http"):
+                headers = {'User-Agent': 'Mozilla/5.0'}
+                r = requests.get(image_url, headers=headers, timeout=10)
+                r.raise_for_status()
+                main_img = Image.open(BytesIO(r.content)).convert('RGB')
+            else:
+                main_img = Image.open(image_url).convert('RGB')
+        except Exception as e:
+            logging.error(f"Error downloading image, using placeholder: {e}")
+            main_img = Image.new('RGB', (1060, 936), color="#222222")
+            
+        # Smart crop using Face Detection
+        main_img = detect_face_and_crop(main_img, 1060, 936)
+        content.paste(main_img, (0, 110))
         
-    img.save(output_path)
-    logging.info(f"Image saved to {output_path} with style: {style}")
+        # Video Credit
+        credit_text = "Video Credit: Twitter (x) videos"
+        c_bbox = draw.textbbox((0,0), credit_text, font=credit_font)
+        c_w = c_bbox[2] - c_bbox[0]
+        draw.text((1060 - c_w - 20 + 2, 110 + 936 - 45 + 2), credit_text, font=credit_font, fill="#000000") # Shadow
+        draw.text((1060 - c_w - 20, 110 + 936 - 45), credit_text, font=credit_font, fill="#E0E0E0")
+        
+        # 3. Text Area (20% -> 234px)
+        text_y = 1065
+        
+        # Title
+        pilmoji.text((30, text_y), headline.upper(), font=title_font, fill="#FFFFFF")
+        text_y += 50
+        
+        # Description
+        lines = []
+        current_line = []
+        for word in description.split():
+            current_line.append(word)
+            bbox = draw.textbbox((0,0), " ".join(current_line), font=desc_font)
+            if bbox[2] - bbox[0] > 1000:
+                current_line.pop()
+                lines.append(" ".join(current_line))
+                current_line = [word]
+        if current_line:
+            lines.append(" ".join(current_line))
+        
+        for line in lines[:2]: # Max 2 lines to fit safely
+            pilmoji.text((30, text_y), line, font=desc_font, fill="#F0F0F0")
+            text_y += 35
+            
+        text_y += 15
+        # Hashtags
+        pilmoji.text((30, text_y), hashtag_str, font=desc_font, fill="#A0C0E0")
+        
+        # 4. Footer section (1280 to 1420)
+        footer_y = 1280
+        draw.rectangle([0, footer_y, 1060, 1420], fill="#334168")
+        draw.line([(0, footer_y), (1060, footer_y)], fill="#506080", width=2)
+        
+        tiny_text = "Tap or hold to like and react with Love, Haha, Wow, or Sad!"
+        t_bbox = draw.textbbox((0,0), tiny_text, font=small_font)
+        draw.text(((1060 - (t_bbox[2]-t_bbox[0]))/2, footer_y + 10), tiny_text, font=small_font, fill="#A0A0A0")
+        
+        action_y = 1345
+        pilmoji.text((30, action_y), f"👍 ❤️ {likes} Likes", font=footer_font, fill="#FFFFFF")
+        pilmoji.text((450, action_y), "😂 😲 😢", font=footer_font, fill="#FFFFFF")
+        pilmoji.text((650, action_y), "💬 Comment", font=footer_font, fill="#FFFFFF")
+        pilmoji.text((880, action_y), "🔗 Share", font=footer_font, fill="#FFFFFF")
+        
+    base_img.paste(content, (10, 10))
+    base_img.save(output_path)
+    logging.info(f"Image saved to {output_path} with smart crop and 80/20 layout.")
     return output_path
 
 if __name__ == "__main__":
-    sample_headline = "Shocking Update on *Tom Cruise*!"
-    sample_hook = "The entire internet is talking about this shocking Hollywood update. What do you think about the *latest drama*?"
+    sample_headline = "BREAKING: AMAZING NEW DISCOVERY! 🚀"
+    sample_hook = "A stunning new discovery has left everyone absolutely speechless! This completely changes everything we thought we knew! What are your thoughts? 👇 #Discovery #News #Trending #Update"
+    
+    # Using a reliable image from GitHub that contains a face
+    os.system('curl -L -o new_test_image.jpg "https://raw.githubusercontent.com/pjreddie/darknet/master/data/person.jpg"')
+    real_image_url = "new_test_image.jpg"
+    
     create_facebook_post(
-        "https://images.unsplash.com/photo-1598899134739-24c46f58b8c0?q=80&w=1080&auto=format&fit=crop", 
+        image_url=real_image_url, 
         headline=sample_headline, 
         hook_text=sample_hook,
-        branding="Celebrity Buzz USA",
         output_path="test_output.jpg"
     )

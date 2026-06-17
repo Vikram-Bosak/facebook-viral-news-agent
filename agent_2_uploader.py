@@ -102,7 +102,7 @@ def upload_to_facebook(image_path, text_content):
         logging.error("FACEBOOK_ACCESS_TOKEN is missing. Cannot upload to Facebook.")
         return False
         
-    url = f"https://graph.facebook.com/{page_id}/photos"
+    url = f"https://graph.facebook.com/v19.0/{page_id}/photos"
     
     try:
         with open(image_path, 'rb') as image_file:
@@ -111,7 +111,8 @@ def upload_to_facebook(image_path, text_content):
             }
             data = {
                 'message': text_content,
-                'access_token': access_token
+                'access_token': access_token,
+                'published': 'true'
             }
             
             logging.info(f"Uploading {image_path} to Facebook...")
