@@ -21,6 +21,9 @@ jobs:
         with:
           python-version: '3.11'
           
+      - name: Install System Dependencies
+        run: sudo apt-get update && sudo apt-get install -y libglib2.0-0 libsm6 libxrender1 libxext6
+          
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip

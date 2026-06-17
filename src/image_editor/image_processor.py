@@ -203,16 +203,4 @@ def create_facebook_post(image_url, headline, hook_text, branding="Celebrity Buz
     return output_path
 
 if __name__ == "__main__":
-    sample_headline = "BREAKING: AMAZING NEW DISCOVERY! 🚀"
-    sample_hook = "A stunning new discovery has left everyone absolutely speechless! This completely changes everything we thought we knew! What are your thoughts? 👇 #Discovery #News #Trending #Update"
-    
-    # Using a reliable image from GitHub that contains a face
-    os.system('curl -L -o new_test_image.jpg "https://raw.githubusercontent.com/pjreddie/darknet/master/data/person.jpg"')
-    real_image_url = "new_test_image.jpg"
-    
-    create_facebook_post(
-        image_url=real_image_url, 
-        headline=sample_headline, 
-        hook_text=sample_hook,
-        output_path="test_output.jpg"
-    )
+    logging.info("Image processor module loaded. Use create_facebook_post() to generate posters.")

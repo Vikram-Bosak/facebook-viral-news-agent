@@ -9,9 +9,9 @@ from openai import OpenAI
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def random_sleep(max_minutes=20):
+def random_sleep(max_minutes=1):
     sleep_time = random.randint(1, max_minutes * 60)
-    logging.info(f"Random Jitter: Sleeping for {sleep_time // 60} minutes and {sleep_time % 60} seconds to simulate human behavior...")
+    logging.info(f"Random Jitter: Sleeping for {sleep_time} seconds to prevent API rate limits...")
     time.sleep(sleep_time)
     logging.info("Woke up from jitter. Proceeding with upload.")
 
@@ -251,5 +251,11 @@ def monitor_telegram_queue():
 
 if __name__ == "__main__":
     load_dotenv()
+    
+    # Fail-Fast Validation
+    if not os.getenv("NVIDIA_API_KEY") or not os.getenv("FACEBOOK_ACCESS_TOKEN") or not os.getenv("TELEGRAM_CHAT_ID"):
+        logging.error("CRITICAL ERROR: Missing essential environment variables (NVIDIA_API_KEY, FACEBOOK_ACCESS_TOKEN, or TELEGRAM_CHAT_ID). Exiting immediately.")
+        exit(1)
+        
     logging.info("Starting Agent 2: Telegram Monitor & Uploader")
     monitor_telegram_queue()

@@ -89,4 +89,10 @@ def job():
 
 if __name__ == "__main__":
     load_dotenv()
+    
+    # Fail-Fast Validation
+    if not os.getenv("NVIDIA_API_KEY") or not os.getenv("TELEGRAM_BOT_TOKEN") or not os.getenv("TELEGRAM_CHAT_ID"):
+        logging.error("CRITICAL ERROR: Missing essential environment variables. Check NVIDIA_API_KEY, TELEGRAM_BOT_TOKEN, and TELEGRAM_CHAT_ID. Exiting immediately.")
+        exit(1)
+        
     job()
