@@ -5,7 +5,7 @@ import pytz
 from datetime import datetime
 from dotenv import load_dotenv
 
-from src.scraper.cnn_fetcher import get_cnn_entertainment_news
+from src.scraper.multi_source_fetcher import get_latest_entertainment_news
 from src.analyzer.llm_analyzer import generate_content_from_article
 from src.image_editor.image_processor import create_facebook_post
 from src.telegram.telegram_reporter import send_telegram_photo
@@ -24,10 +24,10 @@ def save_processed_trend(trend_title):
         f.write(f"{trend_title}\n")
 
 def job():
-    logging.info("Starting automated job (1 Image per run)...")
-    news_items = get_cnn_entertainment_news()
+    logging.info("Starting automated job (Scanning 4 Sources for news under 2 hours old)...")
+    news_items = get_latest_entertainment_news(max_age_hours=2)
     if not news_items:
-        logging.info("No new articles found.")
+        logging.info("No fresh articles found within the last 2 hours.")
         return
 
     processed = load_processed_trends()
