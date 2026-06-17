@@ -104,13 +104,13 @@ def create_facebook_post(image_url, headline, hook_text, branding="Celebrity Buz
     # Text: 234px (20%)
 
     base_img = Image.new('RGB', (1080, 1440), color="#C6A664")
-    content = Image.new('RGB', (1060, 1420), color="#4A5A84")
+    content = Image.new('RGB', (1060, 1420), color="#000000") # Black background for text area
     draw = ImageDraw.Draw(content)
     
     header_font = get_font(55, bold=True)
     credit_font = get_font(30, bold=True)
     title_font = get_font(35, bold=True)
-    desc_font = get_font(26, bold=False)
+    desc_font = get_font(26, bold=True) # Bold description
     small_font = get_font(18, bold=False)
     footer_font = get_font(30, bold=True)
     
@@ -158,7 +158,7 @@ def create_facebook_post(image_url, headline, hook_text, branding="Celebrity Buz
         text_y = 1065
         
         # Title
-        pilmoji.text((30, text_y), headline.upper(), font=title_font, fill="#FFFFFF")
+        pilmoji.text((30, text_y), headline.upper(), font=title_font, fill="#FFFF00") # Yellow text
         text_y += 50
         
         # Description
@@ -175,12 +175,12 @@ def create_facebook_post(image_url, headline, hook_text, branding="Celebrity Buz
             lines.append(" ".join(current_line))
         
         for line in lines[:2]: # Max 2 lines to fit safely
-            pilmoji.text((30, text_y), line, font=desc_font, fill="#F0F0F0")
+            pilmoji.text((30, text_y), line, font=desc_font, fill="#FFFF00") # Yellow text
             text_y += 35
             
         text_y += 15
         # Hashtags
-        pilmoji.text((30, text_y), hashtag_str, font=desc_font, fill="#A0C0E0")
+        pilmoji.text((30, text_y), hashtag_str, font=desc_font, fill="#FFFF00") # Yellow text
         
         # 4. Footer section (1280 to 1420)
         footer_y = 1280
