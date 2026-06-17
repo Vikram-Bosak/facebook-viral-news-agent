@@ -93,7 +93,9 @@ def create_facebook_post(image_url, headline, hook_text, branding="Celebrity Buz
     if not hashtag_str:
         hashtag_str = "#CelebrityBuzz #Hollywood #Entertainment"
 
-    likes = "15,482"
+    import random
+    random_likes = random.randint(5420, 29850)
+    likes = f"{random_likes:,}"
 
     # Strict 80/20 Layout
     # Content: 1060x1420
