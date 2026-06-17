@@ -139,10 +139,16 @@ def send_detailed_report(bot_token, chat_id, message_id, title, facebook_text, p
     url_post_id = post_id.split('_')[-1] if '_' in post_id else post_id
     public_url = f"https://www.facebook.com/{page_id}/posts/{url_post_id}"
     
+    import html
+    
     # Extract hashtags and SEO Title (Headline)
     lines = facebook_text.split('\n')
     seo_title = lines[0] if lines else "Hollywood Update"
     hashtags = " ".join([word for word in facebook_text.split() if word.startswith("#")])
+    
+    safe_title = html.escape(title)
+    safe_seo_title = html.escape(seo_title)
+    safe_facebook_text = html.escape(facebook_text)
     
     image_name = os.path.basename(image_path)
     
@@ -154,9 +160,9 @@ def send_detailed_report(bot_token, chat_id, message_id, title, facebook_text, p
         f"🚀 UPLOADED\n"
         f"✔️ COMPLETED\n\n"
         f"📤 Facebook Upload Status: Success\n\n"
-        f"🏷️ <b>SEO Title:</b>\n{seo_title}\n\n"
-        f"📝 <b>Description:</b>\n{facebook_text}\n\n"
-        f"Original Title: {title}\n"
+        f"🏷️ <b>SEO Title:</b>\n{safe_seo_title}\n\n"
+        f"📝 <b>Description:</b>\n{safe_facebook_text}\n\n"
+        f"Original Title: {safe_title}\n"
         f"Source: {source_url}\n"
         f"Original Image: {image_url}\n\n"
         f"🔗 <b>Facebook Post URL:</b>\n{public_url}\n\n"
