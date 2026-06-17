@@ -228,7 +228,7 @@ def monitor_telegram_queue():
             
             try:
                 # Random Jitter (Human-like behavior)
-                random_sleep(max_minutes=20)
+                random_sleep(max_minutes=1)
                 
                 download_telegram_photo(file_id, bot_token, download_path)
                 
