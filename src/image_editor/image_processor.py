@@ -2,10 +2,9 @@ import os
 import requests
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont
-from pilmoji import Pilmoji
 import logging
-import cv2
 import numpy as np
+import re
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -18,9 +17,12 @@ def ensure_font_downloaded(font_url, font_path):
         except Exception as e:
             logging.error(f"Failed to download font: {e}")
 
-def get_font(size, bold=False):
+def get_font(name="anton", size=40):
     os.makedirs("assets/fonts", exist_ok=True)
-    if bold:
+    if name == "anton":
+        font_path = "assets/fonts/Anton-Regular.ttf"
+        font_url = "https://github.com/googlefonts/anton/raw/main/fonts/ttf/Anton-Regular.ttf"
+    elif name == "roboto":
         font_path = "assets/fonts/Roboto-Bold.ttf"
         font_url = "https://github.com/googlefonts/roboto/raw/main/src/hinted/Roboto-Bold.ttf"
     else:
@@ -33,176 +35,194 @@ def get_font(size, bold=False):
     except Exception:
         return ImageFont.load_default()
 
-def detect_face_and_crop(img, target_w, target_h):
+def center_crop(img, target_w, target_h):
     """
-    Detects a face in the image and crops it so the face is always in the safe zone.
+    Crops the image to the target size from the center.
     """
-    img_cv = np.array(img)
-    if len(img_cv.shape) == 3 and img_cv.shape[2] == 3:
-        gray = cv2.cvtColor(img_cv, cv2.COLOR_RGB2GRAY)
-    else:
-        gray = img_cv
-        
-    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=4, minSize=(30, 30))
-    
     img_w, img_h = img.size
-    if len(faces) > 0:
-        # Get largest face
-        (x, y, w, h) = sorted(faces, key=lambda f: f[2]*f[3], reverse=True)[0]
-        face_center_x = x + w // 2
-        face_center_y = y + h // 2
-        logging.info("Face detected! Using smart crop.")
-    else:
-        face_center_x = img_w // 2
-        face_center_y = img_h // 2
-        logging.info("No face detected. Using center crop.")
-        
-    # Resize image so the smallest dimension matches the target
+    
     ratio = max(target_w / img_w, target_h / img_h)
     new_w = int(img_w * ratio)
     new_h = int(img_h * ratio)
     img_resized = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
     
-    # Map face center to new dimensions
-    new_face_center_x = int(face_center_x * ratio)
-    new_face_center_y = int(face_center_y * ratio)
-    
-    # Calculate crop box
-    left = max(0, new_face_center_x - target_w // 2)
-    if left + target_w > new_w: left = new_w - target_w
-    
-    # Vertically position face slightly above center for good composition
-    top = max(0, new_face_center_y - int(target_h * 0.4))
-    if top + target_h > new_h: top = new_h - target_h
+    left = (new_w - target_w) // 2
+    top = (new_h - target_h) // 2
     
     return img_resized.crop((left, top, left + target_w, top + target_h))
 
-def create_facebook_post(image_url, headline, hook_text, branding="Celebrity Buzz USA", style="Template Style", output_path="output.jpg", logo_path="logo.png", watermark_path=None):
-    words = hook_text.split()
-    desc_words = []
-    hashtags = []
-    for w in words:
-        if w.startswith('#'):
-            hashtags.append(w)
+def fetch_image(url):
+    try:
+        if url.startswith("http"):
+            headers = {'User-Agent': 'Mozilla/5.0'}
+            r = requests.get(url, headers=headers, timeout=10)
+            r.raise_for_status()
+            return Image.open(BytesIO(r.content)).convert('RGB')
         else:
-            desc_words.append(w)
-            
-    description = " ".join(desc_words)
-    hashtag_str = " ".join(hashtags)
-    if not hashtag_str:
-        hashtag_str = "#CelebrityBuzz #Hollywood #Entertainment"
+            return Image.open(url).convert('RGB')
+    except Exception as e:
+        logging.error(f"Error downloading image {url}: {e}")
+        return None
 
-    import random
-    random_likes = random.randint(5420, 29850)
-    likes = f"{random_likes:,}"
+def draw_gradient(image, top_y, bottom_y, color_start=(0,0,0,0), color_end=(0,0,0,255)):
+    """Draws a vertical gradient on the image."""
+    draw = ImageDraw.Draw(image, 'RGBA')
+    height = bottom_y - top_y
+    for i in range(height):
+        # Calculate color for this line
+        ratio = i / height
+        r = int(color_start[0] + ratio * (color_end[0] - color_start[0]))
+        g = int(color_start[1] + ratio * (color_end[1] - color_start[1]))
+        b = int(color_start[2] + ratio * (color_end[2] - color_start[2]))
+        a = int(color_start[3] + ratio * (color_end[3] - color_start[3]))
+        draw.line([(0, top_y + i), (image.width, top_y + i)], fill=(r,g,b,a))
 
-    # Strict 80/20 Layout
-    # Content: 1060x1420
-    # Header: 110px
-    # Footer: 140px
-    # Remaining: 1170px
-    # Image: 936px (80%)
-    # Text: 234px (20%)
-
-    base_img = Image.new('RGB', (1080, 1440), color="#C6A664")
-    content = Image.new('RGB', (1060, 1420), color="#000000") # Black background for text area
-    draw = ImageDraw.Draw(content)
+def render_multicolor_text_centered(draw, text, y_pos, font, max_width, img_width):
+    """
+    Renders text centered. Words wrapped in * are yellow (#FFFF00), others white (#FFFFFF).
+    Returns the new y_pos.
+    """
+    # Simple word wrapping
+    words = text.split()
+    lines = []
+    current_line = []
     
-    header_font = get_font(55, bold=True)
-    credit_font = get_font(30, bold=True)
-    title_font = get_font(35, bold=True)
-    desc_font = get_font(26, bold=True) # Bold description
-    small_font = get_font(18, bold=False)
-    footer_font = get_font(30, bold=True)
-    
-    with Pilmoji(content) as pilmoji:
-        # 1. Top Header
-        draw.rectangle([0, 0, 1060, 110], fill="#1E243A")
-        header_text = f"🎤 {branding}"
-        pilmoji.text((30, 25), header_text, font=header_font, fill="#FFFFFF")
-        
-        if logo_path and os.path.exists(logo_path):
-            try:
-                logo = Image.open(logo_path).convert("RGBA")
-                lw, lh = logo.size
-                n_w = int(lw * (80/lh))
-                logo = logo.resize((n_w, 80), Image.Resampling.LANCZOS)
-                content.paste(logo, (1060 - n_w - 20, 15), logo)
-            except Exception as e:
-                logging.error(f"Failed to load logo: {e}")
-
-        # 2. Main Image (Height 936)
+    def get_line_width(line_words):
+        # strip asterisks for measurement
+        clean_text = " ".join(line_words).replace("*", "")
+        # Handle fallback for textbbox if Pillow version varies
         try:
-            if image_url.startswith("http"):
-                headers = {'User-Agent': 'Mozilla/5.0'}
-                r = requests.get(image_url, headers=headers, timeout=10)
-                r.raise_for_status()
-                main_img = Image.open(BytesIO(r.content)).convert('RGB')
-            else:
-                main_img = Image.open(image_url).convert('RGB')
-        except Exception as e:
-            logging.error(f"Error downloading image, using placeholder: {e}")
-            main_img = Image.new('RGB', (1060, 936), color="#222222")
-            
-        # Smart crop using Face Detection
-        main_img = detect_face_and_crop(main_img, 1060, 936)
-        content.paste(main_img, (0, 110))
-        
-        # Video Credit
-        credit_text = "Video Credit: Twitter (x) videos"
-        c_bbox = draw.textbbox((0,0), credit_text, font=credit_font)
-        c_w = c_bbox[2] - c_bbox[0]
-        draw.text((1060 - c_w - 20 + 2, 110 + 936 - 45 + 2), credit_text, font=credit_font, fill="#000000") # Shadow
-        draw.text((1060 - c_w - 20, 110 + 936 - 45), credit_text, font=credit_font, fill="#E0E0E0")
-        
-        # 3. Text Area (20% -> 234px)
-        text_y = 1065
-        
-        # Title
-        pilmoji.text((30, text_y), headline.upper(), font=title_font, fill="#FFFF00") # Yellow text
-        text_y += 50
-        
-        # Description
-        lines = []
-        current_line = []
-        for word in description.split():
-            current_line.append(word)
-            bbox = draw.textbbox((0,0), " ".join(current_line), font=desc_font)
-            if bbox[2] - bbox[0] > 1000:
-                current_line.pop()
-                lines.append(" ".join(current_line))
-                current_line = [word]
-        if current_line:
-            lines.append(" ".join(current_line))
-        
-        for line in lines[:2]: # Max 2 lines to fit safely
-            pilmoji.text((30, text_y), line, font=desc_font, fill="#FFFF00") # Yellow text
-            text_y += 35
-            
-        text_y += 15
-        # Hashtags
-        pilmoji.text((30, text_y), hashtag_str, font=desc_font, fill="#FFFF00") # Yellow text
-        
-        # 4. Footer section (1280 to 1420)
-        footer_y = 1280
-        draw.rectangle([0, footer_y, 1060, 1420], fill="#334168")
-        draw.line([(0, footer_y), (1060, footer_y)], fill="#506080", width=2)
-        
-        tiny_text = "Tap or hold to like and react with Love, Haha, Wow, or Sad!"
-        t_bbox = draw.textbbox((0,0), tiny_text, font=small_font)
-        draw.text(((1060 - (t_bbox[2]-t_bbox[0]))/2, footer_y + 10), tiny_text, font=small_font, fill="#A0A0A0")
-        
-        action_y = 1345
-        pilmoji.text((30, action_y), f"👍 ❤️ {likes} Likes", font=footer_font, fill="#FFFFFF")
-        pilmoji.text((450, action_y), "😂 😲 😢", font=footer_font, fill="#FFFFFF")
-        pilmoji.text((650, action_y), "💬 Comment", font=footer_font, fill="#FFFFFF")
-        pilmoji.text((880, action_y), "🔗 Share", font=footer_font, fill="#FFFFFF")
-        
-    base_img.paste(content, (10, 10))
-    base_img.save(output_path)
-    logging.info(f"Image saved to {output_path} with smart crop and 80/20 layout.")
-    return output_path
+            return draw.textbbox((0,0), clean_text, font=font)[2]
+        except AttributeError:
+            return draw.textsize(clean_text, font=font)[0]
 
-if __name__ == "__main__":
-    logging.info("Image processor module loaded. Use create_facebook_post() to generate posters.")
+    for word in words:
+        current_line.append(word)
+        if get_line_width(current_line) > max_width:
+            current_line.pop()
+            lines.append(current_line)
+            current_line = [word]
+    if current_line:
+        lines.append(current_line)
+        
+    line_spacing = 10
+    
+    for line_words in lines:
+        line_width = get_line_width(line_words)
+        x_pos = (img_width - line_width) // 2
+        
+        for word in line_words:
+            is_highlight = word.startswith("*") and word.endswith("*")
+            clean_word = word.replace("*", "")
+            color = "#E0FF00" if is_highlight else "#FFFFFF" # Yellow/Greenish highlight
+            
+            draw.text((x_pos, y_pos), clean_word, font=font, fill=color)
+            
+            try:
+                word_w = draw.textbbox((0,0), clean_word, font=font)[2]
+                space_w = draw.textbbox((0,0), " ", font=font)[2]
+            except AttributeError:
+                word_w = draw.textsize(clean_word, font=font)[0]
+                space_w = draw.textsize(" ", font=font)[0]
+                
+            x_pos += word_w + space_w
+            
+        try:
+            line_height = draw.textbbox((0,0), "A", font=font)[3]
+        except AttributeError:
+            line_height = draw.textsize("A", font=font)[1]
+            
+        y_pos += line_height + line_spacing
+        
+    return y_pos
+
+def create_facebook_post(image_url, image_url_2, headline, source_name="IGN", output_path="output.jpg", logo_path="assets/logo.png"):
+    # Premium Layout Dimensions: 1080 x 1350
+    base_width, base_height = 1080, 1350
+    img_area_height = 950
+    bg_color = "#0B0C10" # Dark bottom
+    
+    base_img = Image.new('RGB', (base_width, base_height), color=bg_color)
+    
+    # 1. Process Images (Split Screen or Single)
+    img1 = fetch_image(image_url) if image_url else None
+    img2 = fetch_image(image_url_2) if image_url_2 else None
+    
+    if img1 and img2:
+        # Split screen: left and right
+        w1, w2 = 540, 540
+        img1_cropped = center_crop(img1, w1, img_area_height)
+        img2_cropped = center_crop(img2, w2, img_area_height)
+        base_img.paste(img1_cropped, (0, 0))
+        base_img.paste(img2_cropped, (w1, 0))
+        
+        # Add a subtle black divider line
+        draw_temp = ImageDraw.Draw(base_img)
+        draw_temp.line([(w1, 0), (w1, img_area_height)], fill="#000000", width=4)
+        
+    elif img1:
+        # Single image
+        img1_cropped = center_crop(img1, base_width, img_area_height)
+        base_img.paste(img1_cropped, (0, 0))
+    else:
+        # Fallback empty
+        pass
+        
+    # 2. Gradient Overlay for smooth transition
+    # From y=600 to y=950
+    draw_gradient(base_img, 650, img_area_height, color_start=(11,12,16,0), color_end=(11,12,16,255))
+    
+    # Needs RGBA composite for gradient to work if base is RGB, actually draw_gradient on RGB will just draw opaque if we don't use alpha composite.
+    # Let's fix gradient by creating an overlay
+    overlay = Image.new('RGBA', (base_width, base_height), (0,0,0,0))
+    draw_gradient(overlay, 650, img_area_height, color_start=(11,12,16,0), color_end=(11,12,16,255))
+    base_img = Image.alpha_composite(base_img.convert('RGBA'), overlay).convert('RGB')
+    
+    draw = ImageDraw.Draw(base_img)
+    
+    # 3. Logo
+    if logo_path and os.path.exists(logo_path):
+        try:
+            logo = Image.open(logo_path).convert("RGBA")
+            # Resize logo to 80x80
+            logo = logo.resize((80, 80), Image.Resampling.LANCZOS)
+            base_img.paste(logo, (30, 30), logo)
+        except Exception as e:
+            logging.error(f"Failed to load logo: {e}")
+            
+    # 4. NEWS Badge
+    badge_w, badge_h = 100, 35
+    badge_x = (base_width - badge_w) // 2
+    badge_y = 920
+    draw.rounded_rectangle([badge_x, badge_y, badge_x + badge_w, badge_y + badge_h], radius=8, fill="#E0FF00")
+    
+    badge_font = get_font("roboto", size=18)
+    try:
+        tw = draw.textbbox((0,0), "NEWS", font=badge_font)[2]
+    except AttributeError:
+        tw = draw.textsize("NEWS", font=badge_font)[0]
+        
+    draw.text((badge_x + (badge_w - tw)//2, badge_y + 6), "NEWS", font=badge_font, fill="#000000")
+    
+    # 5. Headline
+    headline_font = get_font("anton", size=65)
+    # The headline comes with *keyword* from LLM
+    text_start_y = 980
+    margin = 60
+    max_text_width = base_width - (margin * 2)
+    
+    render_multicolor_text_centered(draw, headline, text_start_y, headline_font, max_text_width, base_width)
+    
+    # 6. Source Footer
+    footer_font = get_font("roboto", size=18)
+    footer_text = f"VIA {source_name.upper()}"
+    try:
+        fw = draw.textbbox((0,0), footer_text, font=footer_font)[2]
+    except AttributeError:
+        fw = draw.textsize(footer_text, font=footer_font)[0]
+        
+    draw.text(((base_width - fw)//2, 1280), footer_text, font=footer_font, fill="#888888")
+    
+    base_img.save(output_path)
+    logging.info(f"Image saved to {output_path} with split screen layout.")
+    return output_path

@@ -63,3 +63,38 @@ Respond STRICTLY in JSON format with three keys: "headline", "hook_text", and "s
             "hook_text": "The entire internet is talking about this. What do you think about the latest drama?",
             "style": "Breaking News Style"
         }
+
+def generate_facebook_caption(title):
+    logging.info(f"Generating Facebook caption for: {title}")
+    prompt = f"""
+Write a highly engaging Facebook post caption for an American entertainment news page called 'Celebrity Buzz USA'.
+The post is about this news title: {title}
+
+Requirements:
+- Keep it catchy, exciting, and short (3-4 sentences max).
+- Include 2-3 relevant emojis.
+- Include an engaging hook or question at the end to drive comments.
+- Include 5-6 relevant hashtags at the very bottom (like #HollywoodNews, #Trending).
+- Do not include markdown formatting, just the raw text ready for Facebook.
+"""
+    try:
+        completion = client.chat.completions.create(
+            model="nvidia/nemotron-3-ultra-550b-a55b",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.8,
+            top_p=0.95,
+            max_tokens=1024,
+            stream=False
+        )
+        caption = completion.choices[0].message.content.strip()
+        if not caption:
+            raise Exception("Empty response from LLM")
+        return caption
+    except Exception as e:
+        logging.error(f"LLM caption generation failed: {e}")
+        return (
+            f"🚨 Hollywood Update! 🚨\n\n"
+            f"{title}\n\n"
+            f"Stay tuned for more updates! 👇\n"
+            f"#HollywoodNews #CelebrityBuzz #Trending #Entertainment #News #CelebrityBuzzUSA"
+        )

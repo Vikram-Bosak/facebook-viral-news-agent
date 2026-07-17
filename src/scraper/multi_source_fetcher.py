@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import time
 
 FEEDS = [
+    "https://news.google.com/rss/search?q=Hollywood+entertainment+news+trending&hl=en-US&gl=US&ceid=US:en",
     "https://variety.com/feed/",
     "https://www.hollywoodreporter.com/feed/",
     "https://deadline.com/feed/",
