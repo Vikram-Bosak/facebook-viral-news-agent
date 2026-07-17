@@ -130,16 +130,20 @@ https://github.com/Vikram-Bosak/facebook-viral-news-agent
 """
         send_discord_report(processed_img_path, report)
 
+        # Always mark as processed so we don't repeat the same article, even if it failed
+        save_processed_trend(title)
+
         if upload_success:
-            save_processed_trend(title)
             logging.info(f"Successfully processed and uploaded {title}.")
-            break # Process only one successfully per run to avoid spamming
         else:
             error_msg = str(fb_post_id)
             if "OAuthException" in error_msg or "publish_actions" in error_msg:
-                logging.error(f"Critical Authentication Error detected! Aborting loop to prevent API spam.")
-                break
-            logging.error(f"Failed to upload {title} to Facebook. Will try another article if available.")
+                logging.error(f"Critical Authentication Error detected! Facebook upload failed.")
+            else:
+                logging.error(f"Failed to upload {title} to Facebook.")
+        
+        # Unconditionally break to wait 2 hours before trying the next article
+        break
 
 
 if __name__ == "__main__":
