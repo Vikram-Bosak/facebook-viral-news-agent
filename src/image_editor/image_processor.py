@@ -98,10 +98,13 @@ def render_multicolor_text_centered(draw, text, y_pos, font, max_width, img_widt
     tokens = []
     in_highlight = False
     for word in text.split():
-        if word.startswith("*"):
+        # Check start (ignore leading punctuation like quotes)
+        if "*" in word and word.find("*") < len(word) / 2:
             in_highlight = True
             
-        ends_with = word.endswith("*") and len(word) > 1
+        # Check end (asterisk could be before trailing punctuation)
+        ends_with = "*" in word[len(word)//2:] and len(word) > 1
+        
         clean_word = word.replace("*", "")
         
         tokens.append({"text": clean_word, "highlight": in_highlight})
@@ -231,6 +234,11 @@ def create_facebook_post(image_url, image_url_2, headline, source_name="IGN", ou
         except Exception as e:
             logging.error(f"Failed to load banner: {e}")
             
+    import re
+    # Sanitize headline to prevent missing glyph boxes (emojis, etc)
+    headline = headline.replace("’", "'").replace("“", '"').replace("”", '"')
+    headline = re.sub(r'[^\x00-\x7F]+', '', headline)
+    
     # 4. Determine font size
     headline_length = len(headline)
     if headline_length < 40:
