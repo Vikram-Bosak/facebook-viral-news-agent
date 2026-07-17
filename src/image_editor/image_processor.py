@@ -90,9 +90,9 @@ def render_multicolor_text_centered(draw, text, y_pos, font, max_width, img_widt
     def get_line_width(line_words):
         # strip asterisks for measurement
         clean_text = " ".join(line_words).replace("*", "")
-        # Handle fallback for textbbox if Pillow version varies
         try:
-            return draw.textbbox((0,0), clean_text, font=font)[2]
+            bbox = draw.textbbox((0, 0), clean_text, font=font)
+            return bbox[2] - bbox[0]
         except AttributeError:
             return draw.textsize(clean_text, font=font)[0]
 
@@ -119,8 +119,10 @@ def render_multicolor_text_centered(draw, text, y_pos, font, max_width, img_widt
             draw.text((x_pos, y_pos), clean_word, font=font, fill=color)
             
             try:
-                word_w = draw.textbbox((0,0), clean_word, font=font)[2]
-                space_w = draw.textbbox((0,0), " ", font=font)[2]
+                bbox_word = draw.textbbox((0, 0), clean_word, font=font)
+                word_w = bbox_word[2] - bbox_word[0]
+                bbox_space = draw.textbbox((0, 0), " ", font=font)
+                space_w = bbox_space[2] - bbox_space[0]
             except AttributeError:
                 word_w = draw.textsize(clean_word, font=font)[0]
                 space_w = draw.textsize(" ", font=font)[0]
@@ -128,11 +130,13 @@ def render_multicolor_text_centered(draw, text, y_pos, font, max_width, img_widt
             x_pos += word_w + space_w
             
         try:
-            line_height = draw.textbbox((0,0), "A", font=font)[3]
+            bbox_A = draw.textbbox((0, 0), "A", font=font)
+            line_height = bbox_A[3] - bbox_A[1]
         except AttributeError:
             line_height = draw.textsize("A", font=font)[1]
             
-        y_pos += line_height + line_spacing
+        # Tighter line spacing for Anton font
+        y_pos += line_height * 0.95 + line_spacing
         
     return y_pos
 
@@ -168,14 +172,13 @@ def create_facebook_post(image_url, image_url_2, headline, source_name="IGN", ou
         # Fallback empty
         pass
         
-    # 2. Gradient Overlay for smooth transition
-    # From y=600 to y=950
-    draw_gradient(base_img, 650, img_area_height, color_start=(11,12,16,0), color_end=(11,12,16,255))
+    # From y=600 to y=1050 for a taller gradient for bigger text
+    draw_gradient(base_img, 600, 1050, color_start=(11,12,16,0), color_end=(11,12,16,255))
     
     # Needs RGBA composite for gradient to work if base is RGB, actually draw_gradient on RGB will just draw opaque if we don't use alpha composite.
     # Let's fix gradient by creating an overlay
     overlay = Image.new('RGBA', (base_width, base_height), (0,0,0,0))
-    draw_gradient(overlay, 650, img_area_height, color_start=(11,12,16,0), color_end=(11,12,16,255))
+    draw_gradient(overlay, 600, 1050, color_start=(11,12,16,0), color_end=(11,12,16,255))
     base_img = Image.alpha_composite(base_img.convert('RGBA'), overlay).convert('RGB')
     
     draw = ImageDraw.Draw(base_img)
@@ -184,31 +187,42 @@ def create_facebook_post(image_url, image_url_2, headline, source_name="IGN", ou
     if logo_path and os.path.exists(logo_path):
         try:
             logo = Image.open(logo_path).convert("RGBA")
-            # Resize logo to 80x80
-            logo = logo.resize((80, 80), Image.Resampling.LANCZOS)
-            base_img.paste(logo, (30, 30), logo)
+            # Resize logo to 140x140
+            logo_size = 140
+            logo = logo.resize((logo_size, logo_size), Image.Resampling.LANCZOS)
+            
+            # Apply circular mask
+            mask = Image.new("L", (logo_size, logo_size), 0)
+            mask_draw = ImageDraw.Draw(mask)
+            mask_draw.ellipse((0, 0, logo_size, logo_size), fill=255)
+            logo.putalpha(mask)
+            
+            base_img.paste(logo, (40, 40), logo)
         except Exception as e:
             logging.error(f"Failed to load logo: {e}")
             
-    # 4. NEWS Badge
-    badge_w, badge_h = 100, 35
-    badge_x = (base_width - badge_w) // 2
-    badge_y = 920
-    draw.rounded_rectangle([badge_x, badge_y, badge_x + badge_w, badge_y + badge_h], radius=8, fill="#E0FF00")
-    
-    badge_font = get_font("roboto", size=18)
+    # 4. HOLLYWOOD FLASH Badge
+    badge_text = "HOLLYWOOD FLASH"
+    badge_font = get_font("roboto", size=20)
     try:
-        tw = draw.textbbox((0,0), "NEWS", font=badge_font)[2]
+        bbox_badge = draw.textbbox((0, 0), badge_text, font=badge_font)
+        tw = bbox_badge[2] - bbox_badge[0]
     except AttributeError:
-        tw = draw.textsize("NEWS", font=badge_font)[0]
+        tw = draw.textsize(badge_text, font=badge_font)[0]
         
-    draw.text((badge_x + (badge_w - tw)//2, badge_y + 6), "NEWS", font=badge_font, fill="#000000")
+    badge_w = tw + 30
+    badge_h = 35
+    badge_x = (base_width - badge_w) // 2
+    badge_y = 800
+    draw.rounded_rectangle([badge_x, badge_y, badge_x + badge_w, badge_y + badge_h], radius=6, fill="#E0FF00")
+    
+    draw.text((badge_x + 15, badge_y + 8), badge_text, font=badge_font, fill="#000000")
     
     # 5. Headline
-    headline_font = get_font("anton", size=65)
+    headline_font = get_font("anton", size=130)
     # The headline comes with *keyword* from LLM
-    text_start_y = 980
-    margin = 60
+    text_start_y = 860
+    margin = 40
     max_text_width = base_width - (margin * 2)
     
     render_multicolor_text_centered(draw, headline, text_start_y, headline_font, max_text_width, base_width)
