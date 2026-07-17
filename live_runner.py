@@ -17,7 +17,7 @@ def run_agent_loop():
         except Exception as e:
             logging.error(f"Unexpected error occurred: {e}")
             
-        base_sleep = 3600
+        base_sleep = 7200
         jitter = random.randint(0, 15 * 60) # 0 to 15 minutes of random jitter
         total_sleep = base_sleep + jitter
         logging.info(f"Waiting for {base_sleep//60} mins plus {jitter//60} mins jitter (Total: {total_sleep//60} mins) before next run...")
