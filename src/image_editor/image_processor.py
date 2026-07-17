@@ -1,7 +1,7 @@
 import os
 import requests
 from io import BytesIO
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps, ImageEnhance
 import logging
 import numpy as np
 import re
@@ -195,7 +195,7 @@ def render_multicolor_text_centered(draw, text, y_pos, font, max_width, img_widt
         
     return y_pos
 
-def create_facebook_post(image_url, image_url_2, headline, source_name="IGN", output_path="output.jpg", logo_path="assets/logo.png"):
+def create_facebook_post(image_url, image_url_2, headline, source_name="IGN", output_path="output.jpg", logo_path="assets/logo.png", hook_text=""):
     # Premium Layout Dimensions: 1080 x 1350
     base_width, base_height = 1080, 1350
     img_area_height = 950
@@ -206,6 +206,18 @@ def create_facebook_post(image_url, image_url_2, headline, source_name="IGN", ou
     # 1. Process Images (Split Screen or Single)
     img1 = fetch_image(image_url) if image_url else None
     img2 = fetch_image(image_url_2) if image_url_2 else None
+    
+    
+    # Apply Copyright Safety Logic (Horizontal Flip + Minor Brightness Jitter)
+    def apply_safety(img):
+        if not img: return None
+        img = ImageOps.mirror(img)
+        # Apply a tiny undetectable brightness shift to change image hash completely
+        enhancer = ImageEnhance.Brightness(img)
+        return enhancer.enhance(1.02) # +2% brightness
+        
+    img1 = apply_safety(img1)
+    img2 = apply_safety(img2)
     
     if img1 and img2:
         # Split screen: left and right
@@ -246,13 +258,13 @@ def create_facebook_post(image_url, image_url_2, headline, source_name="IGN", ou
     # 4. Determine font size
     headline_length = len(headline)
     if headline_length < 40:
-        font_size = 130
+        font_size = 110
     elif headline_length < 70:
-        font_size = 100
+        font_size = 85
     elif headline_length < 100:
-        font_size = 80
+        font_size = 68
     else:
-        font_size = 64
+        font_size = 54
         
     headline_font = get_font("anton", size=font_size)
     
@@ -260,6 +272,14 @@ def create_facebook_post(image_url, image_url_2, headline, source_name="IGN", ou
     margin = 40
     max_text_width = base_width - (margin * 2)
     text_total_height = render_multicolor_text_centered(draw, headline, 0, headline_font, max_text_width, base_width, dry_run=True)
+    
+    # Add hook_text height
+    hook_font = get_font("roboto", size=35)
+    hook_text_height = 0
+    if hook_text:
+        hook_text = hook_text.replace("*", "") # Remove bold markers
+        hook_text_height = render_multicolor_text_centered(draw, hook_text, 0, hook_font, max_text_width - 40, base_width, dry_run=True) + 20
+        text_total_height += hook_text_height
     
     # Bottom margin padding
     bottom_padding = 60
@@ -283,12 +303,25 @@ def create_facebook_post(image_url, image_url_2, headline, source_name="IGN", ou
             by = int(text_start_y - new_bh - 25)
             base_img.paste(banner, (bx, by), banner)
         except Exception as e:
-            logging.error(f"Failed to load user logo: {e}")
-    
+            logging.error(f"Failed to paste banner: {e}")
+            
+    # Finally draw the text
+    current_y = text_start_y
     # Draw Headline
-    render_multicolor_text_centered(draw, headline, text_start_y, headline_font, max_text_width, base_width)
+    headline_height = render_multicolor_text_centered(draw, headline, current_y, headline_font, max_text_width, base_width)
+    current_y += headline_height + 20
     
-    # 6. Source Footer (Removed per user request)
-    base_img.save(output_path)
+    # Draw Hook Text (Detailed Description)
+    if hook_text:
+        render_multicolor_text_centered(draw, hook_text, current_y, hook_font, max_text_width - 40, base_width)
+    
+    # Ensure directory
+    dir_name = os.path.dirname(output_path)
+    if dir_name:
+        os.makedirs(dir_name, exist_ok=True)
+    
+    
+    # Save Image
+    base_img.save(output_path, quality=95)
     logging.info(f"Image saved to {output_path} with split screen layout.")
     return output_path

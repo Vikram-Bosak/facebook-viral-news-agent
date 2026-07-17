@@ -27,6 +27,11 @@ def force_run():
     
     ai_data = generate_content_from_article(title, description)
     headline = ai_data.get("headline", title)
+    hook_text = ai_data.get("hook_text", description)
+    safety_flags = ai_data.get("safety_flags", [])
+    
+    if safety_flags:
+        logging.warning(f"Warning: Article has safety flags: {safety_flags}")
     
     # We will output this to the test file
     poster_path = "test_today_news.jpg"
@@ -35,6 +40,7 @@ def force_run():
         image_url=image_url, 
         image_url_2=image_url_2,
         headline=headline,
+        hook_text=hook_text,
         source_name=source_name,
         output_path=poster_path,
         logo_path="assets/logo/logo.png"

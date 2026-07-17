@@ -64,7 +64,12 @@ def job():
         headline = ai_data.get("headline", title)
         hook_text = ai_data.get("hook_text", description)
         style = ai_data.get("style", "Breaking News Style")
+        safety_flags = ai_data.get("safety_flags", [])
         
+        if safety_flags:
+            logging.warning(f"Skipping article due to safety flags: {safety_flags}")
+            continue
+            
         logging.info(f"Headline: {headline}")
         
         poster_path = f"output/post_{post_id}.jpg"
@@ -74,6 +79,7 @@ def job():
             image_url=image_url, 
             image_url_2=image_url_2,
             headline=headline,
+            hook_text=hook_text,
             source_name=source_name,
             output_path=poster_path,
             logo_path="assets/logo/logo.png"

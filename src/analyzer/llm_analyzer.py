@@ -29,8 +29,18 @@ Your task:
 3. Generate a hyper-engaging, dramatic, and curiosity-inducing 'headline' (MAX 10 WORDS). This will be written directly on the viral image, so it must grab attention instantly (e.g., "THE TRUTH FINALLY COMES OUT!" or "FANS ARE LOSING IT OVER THIS!").
 4. Generate a viral 'hook_text' (1-2 sentences) to complement the headline.
 5. Highlight 1 to 3 important keywords in the headline by wrapping them in asterisks like *this* to make them stand out in a different color.
+6. **STRICT FACEBOOK POLICY CHECK:** Evaluate the article against Facebook Community Standards and Partner Monetization Policies. If the article contains ANY of the following, return a list of flags in the "safety_flags" array:
+   - "violence" (gore, physical harm, abuse)
+   - "nudity_sexual" (suggestive content, explicit outfits, sexual scandals)
+   - "hate_speech" (racism, severe insults)
+   - "clickbait" (exaggerated or misleading information that withholds key facts)
+   - "engagement_bait" (asking users directly to like/comment/share)
+   - "tragedy" (death, suicide, self-harm, severe accidents)
+   - "politics_controversy" (highly polarizing political figures or events)
+   If it violates ANY of these, list the flags (e.g., ["clickbait", "nudity_sexual"]). Otherwise, return an empty array [].
+7. Ensure the generated headline and hook_text DO NOT sound like clickbait. Be catchy but factual.
 
-Respond STRICTLY in JSON format with three keys: "headline", "hook_text", and "style". Do not include markdown formatting or backticks around the JSON.
+Respond STRICTLY in JSON format with four keys: "headline", "hook_text", "style", and "safety_flags". Do not include markdown formatting or backticks around the JSON.
 """
     try:
         completion = client.chat.completions.create(
