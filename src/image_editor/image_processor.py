@@ -195,23 +195,23 @@ def create_facebook_post(image_url, image_url_2, headline, source_name="IGN", ou
     
     draw = ImageDraw.Draw(base_img)
     
-    # 3. Logo
-    if logo_path and os.path.exists(logo_path):
+    # 3. Top Banner (replacing logo)
+    banner_path = "assets/logo/banner.png"
+    if os.path.exists(banner_path):
         try:
-            logo = Image.open(logo_path).convert("RGBA")
-            # Resize logo to 140x140
-            logo_size = 140
-            logo = logo.resize((logo_size, logo_size), Image.Resampling.LANCZOS)
+            banner = Image.open(banner_path).convert("RGBA")
+            # Resize banner so it spans nicely across the top (e.g. 600px wide)
+            bw, bh = banner.size
+            new_bw = 700
+            new_bh = int(bh * (new_bw / bw))
+            banner = banner.resize((new_bw, new_bh), Image.Resampling.LANCZOS)
             
-            # Apply circular mask
-            mask = Image.new("L", (logo_size, logo_size), 0)
-            mask_draw = ImageDraw.Draw(mask)
-            mask_draw.ellipse((0, 0, logo_size, logo_size), fill=255)
-            logo.putalpha(mask)
-            
-            base_img.paste(logo, (40, 40), logo)
+            # Place at top center
+            bx = (base_width - new_bw) // 2
+            by = 40
+            base_img.paste(banner, (bx, by), banner)
         except Exception as e:
-            logging.error(f"Failed to load logo: {e}")
+            logging.error(f"Failed to load banner: {e}")
             
     # 4. HOLLYWOOD FLASH Badge
     badge_text = "HOLLYWOOD FLASH"
