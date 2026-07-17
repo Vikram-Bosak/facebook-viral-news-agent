@@ -36,7 +36,9 @@ def upload_to_facebook(image_path, text_content):
             return True, post_id
             
     except Exception as e:
-        logging.error(f"Failed to upload to Facebook: {e}")
+        error_msg = f"Failed to upload to Facebook: {e}"
+        logging.error(error_msg)
         if 'response' in locals() and hasattr(response, 'text'):
             logging.error(f"Facebook API Response: {response.text}")
-        return False, None
+            error_msg += " " + response.text
+        return False, error_msg
