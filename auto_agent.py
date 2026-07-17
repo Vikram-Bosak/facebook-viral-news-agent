@@ -17,17 +17,17 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 def load_processed_trends():
     if not os.path.exists("output/processed_news.txt"):
         return set()
-    with open("output/processed_news.txt", "r") as f:
+    with open("output/processed_news.txt", "r", encoding="utf-8") as f:
         return set(line.strip() for line in f)
 
 def save_processed_trend(trend_title):
     os.makedirs("output", exist_ok=True)
-    with open("output/processed_news.txt", "a") as f:
+    with open("output/processed_news.txt", "a", encoding="utf-8") as f:
         f.write(f"{trend_title}\n")
 
 def job():
-    logging.info("Starting automated job (Scanning sources for news under 2 hours old)...")
-    news_items = get_latest_entertainment_news(max_age_hours=2)
+    logging.info("Starting automated job (Scanning sources for news under 24 hours old)...")
+    news_items = get_latest_entertainment_news(max_age_hours=24)
     if not news_items:
         logging.info("No fresh articles found within the last 2 hours.")
         return
@@ -135,7 +135,7 @@ if __name__ == "__main__":
     load_dotenv()
     
     # Fail-Fast Validation
-    required_env_vars = ["NVIDIA_API_KEY", "FACEBOOK_ACCESS_TOKEN"]
+    required_env_vars = ["FACEBOOK_ACCESS_TOKEN"]
     missing_vars = [var for var in required_env_vars if not os.getenv(var)]
     
     if missing_vars:

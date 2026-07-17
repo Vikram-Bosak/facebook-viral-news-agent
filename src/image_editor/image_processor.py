@@ -21,7 +21,7 @@ def get_font(name="anton", size=40):
     os.makedirs("assets/fonts", exist_ok=True)
     if name == "anton":
         font_path = "assets/fonts/Anton-Regular.ttf"
-        font_url = "https://github.com/googlefonts/anton/raw/main/fonts/ttf/Anton-Regular.ttf"
+        font_url = "https://github.com/google/fonts/raw/main/ofl/anton/Anton-Regular.ttf"
         if not os.path.exists(font_path) or os.path.getsize(font_path) < 10000: # Check if corrupted
             import requests
             try:
@@ -238,24 +238,6 @@ def create_facebook_post(image_url, image_url_2, headline, source_name="IGN", ou
     
     draw = ImageDraw.Draw(base_img)
     
-    # 3. Top Banner (replacing logo)
-    banner_path = "assets/logo/banner.png"
-    if os.path.exists(banner_path):
-        try:
-            banner = Image.open(banner_path).convert("RGBA")
-            # Resize banner so it spans nicely across the top (e.g. 600px wide)
-            bw, bh = banner.size
-            new_bw = 700
-            new_bh = int(bh * (new_bw / bw))
-            banner = banner.resize((new_bw, new_bh), Image.Resampling.LANCZOS)
-            
-            # Place at top center
-            bx = (base_width - new_bw) // 2
-            by = 40
-            base_img.paste(banner, (bx, by), banner)
-        except Exception as e:
-            logging.error(f"Failed to load banner: {e}")
-            
     import re
     # Sanitize headline to prevent missing glyph boxes (emojis, etc)
     headline = headline.replace("’", "'").replace("“", '"').replace("”", '"')
@@ -286,23 +268,22 @@ def create_facebook_post(image_url, image_url_2, headline, source_name="IGN", ou
     # The text ends at (base_height - bottom_padding)
     text_start_y = base_height - bottom_padding - text_total_height
     
-    # Badge sits above the text
-    badge_text = "HOLLYWOOD FLASH"
-    badge_font = get_font("roboto", size=20)
-    try:
-        bbox_badge = draw.textbbox((0, 0), badge_text, font=badge_font)
-        tw = bbox_badge[2] - bbox_badge[0]
-    except AttributeError:
-        tw = draw.textsize(badge_text, font=badge_font)[0]
-        
-    badge_w = tw + 30
-    badge_h = 35
-    badge_x = (base_width - badge_w) // 2
-    badge_y = text_start_y - badge_h - 25
-    
-    # Draw badge
-    draw.rounded_rectangle([badge_x, badge_y, badge_x + badge_w, badge_y + badge_h], radius=6, fill="#E0FF00")
-    draw.text((badge_x + 15, badge_y + 8), badge_text, font=badge_font, fill="#000000")
+    # Paste uploaded logo image above the text
+    banner_path = "assets/logo/banner.png"
+    if os.path.exists(banner_path):
+        try:
+            banner = Image.open(banner_path).convert("RGBA")
+            bw, bh = banner.size
+            # The logo from user is a wide banner, let's make it larger (e.g. 500px wide)
+            new_bw = 500
+            new_bh = int(bh * (new_bw / bw))
+            banner = banner.resize((new_bw, new_bh), Image.Resampling.LANCZOS)
+            
+            bx = int((base_width - new_bw) // 2)
+            by = int(text_start_y - new_bh - 25)
+            base_img.paste(banner, (bx, by), banner)
+        except Exception as e:
+            logging.error(f"Failed to load user logo: {e}")
     
     # Draw Headline
     render_multicolor_text_centered(draw, headline, text_start_y, headline_font, max_text_width, base_width)
