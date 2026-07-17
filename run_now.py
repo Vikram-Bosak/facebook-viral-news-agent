@@ -9,7 +9,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 def force_run():
     # Force 24 hours to guarantee we find a trending news item today
     news_items = get_latest_entertainment_news(max_age_hours=24)
-    title = "Bollywood Queen Jacqueline Fernandez Just Dropped Her AI Avatar And its Basically a Digital Twin That Spills Her Secret"
+    title = "*Bollywood Queen* Jacqueline Fernandez Just Dropped Her *AI Avatar* And its Basically a *Digital Twin* That Spills Her Secret"
     description = ""
     image_url = news_items[0]["image_url"] if news_items else "https://via.placeholder.com/800"
     source_url = ""

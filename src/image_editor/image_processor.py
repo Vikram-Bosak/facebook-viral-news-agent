@@ -94,25 +94,38 @@ def render_multicolor_text_centered(draw, text, y_pos, font, max_width, img_widt
     Renders text centered, wrapping it, and colors *asterisk* text in yellow.
     If dry_run is True, it doesn't draw anything, just returns the total height of the text block.
     """
-    words = text.split()
+    # Parse tokens and their highlight states
+    tokens = []
+    in_highlight = False
+    for word in text.split():
+        if word.startswith("*"):
+            in_highlight = True
+            
+        ends_with = word.endswith("*") and len(word) > 1
+        clean_word = word.replace("*", "")
+        
+        tokens.append({"text": clean_word, "highlight": in_highlight})
+        
+        if ends_with:
+            in_highlight = False
+
     lines = []
     current_line = []
     
-    def get_line_width(line_words):
-        # strip asterisks for measurement
-        clean_text = " ".join(line_words).replace("*", "")
+    def get_line_width(line_tokens):
+        clean_text = " ".join([t["text"] for t in line_tokens])
         try:
             bbox = draw.textbbox((0, 0), clean_text, font=font)
             return bbox[2] - bbox[0]
         except AttributeError:
             return draw.textsize(clean_text, font=font)[0]
 
-    for word in words:
-        current_line.append(word)
+    for token in tokens:
+        current_line.append(token)
         if get_line_width(current_line) > max_width:
             current_line.pop()
             lines.append(current_line)
-            current_line = [word]
+            current_line = [token]
     if current_line:
         lines.append(current_line)
         
@@ -132,14 +145,13 @@ def render_multicolor_text_centered(draw, text, y_pos, font, max_width, img_widt
     if dry_run:
         return total_height
     
-    for line_words in lines:
-        line_width = get_line_width(line_words)
+    for line_tokens in lines:
+        line_width = get_line_width(line_tokens)
         x_pos = (img_width - line_width) // 2
         
-        for word in line_words:
-            is_highlight = word.startswith("*") and word.endswith("*")
-            clean_word = word.replace("*", "")
-            color = "#E0FF00" if is_highlight else "#FFFFFF" # Yellow/Greenish highlight
+        for token in line_tokens:
+            clean_word = token["text"]
+            color = "#E0FF00" if token["highlight"] else "#FFFFFF" # Yellow/Greenish highlight
             
             draw.text((x_pos, y_pos), clean_word, font=font, fill=color)
             
