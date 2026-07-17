@@ -26,9 +26,9 @@ Your task:
    - "Celebrity Reaction Style"
    - "Comparison Style"
    - "Storytelling Style"
-3. Generate a click-worthy 'headline' for a Facebook Audience (American English).
-4. Generate a viral 'hook_text'.
-5. Highlight 1 to 3 important keywords in both headline and hook_text by wrapping them in asterisks like *this*.
+3. Generate a hyper-engaging, dramatic, and curiosity-inducing 'headline' (MAX 10 WORDS). This will be written directly on the viral image, so it must grab attention instantly (e.g., "THE TRUTH FINALLY COMES OUT!" or "FANS ARE LOSING IT OVER THIS!").
+4. Generate a viral 'hook_text' (1-2 sentences) to complement the headline.
+5. Highlight 1 to 3 important keywords in the headline by wrapping them in asterisks like *this* to make them stand out in a different color.
 
 Respond STRICTLY in JSON format with three keys: "headline", "hook_text", and "style". Do not include markdown formatting or backticks around the JSON.
 """
