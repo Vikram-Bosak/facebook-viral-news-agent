@@ -249,16 +249,7 @@ def create_facebook_post(image_url, image_url_2, headline, source_name="IGN", ou
     
     render_multicolor_text_centered(draw, headline, text_start_y, headline_font, max_text_width, base_width)
     
-    # 6. Source Footer
-    footer_font = get_font("roboto", size=18)
-    footer_text = f"VIA {source_name.upper()}"
-    try:
-        fw = draw.textbbox((0,0), footer_text, font=footer_font)[2]
-    except AttributeError:
-        fw = draw.textsize(footer_text, font=footer_font)[0]
-        
-    draw.text(((base_width - fw)//2, 1280), footer_text, font=footer_font, fill="#888888")
-    
+    # 6. Source Footer (Removed per user request)
     base_img.save(output_path)
     logging.info(f"Image saved to {output_path} with split screen layout.")
     return output_path
