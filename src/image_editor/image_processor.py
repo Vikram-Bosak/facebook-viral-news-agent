@@ -29,11 +29,23 @@ def get_font(name="anton", size=40):
         font_path = "assets/fonts/Roboto-Regular.ttf"
         font_url = "https://github.com/googlefonts/roboto/raw/main/src/hinted/Roboto-Regular.ttf"
         
+    # Delete corrupted files (< 10KB)
+    if os.path.exists(font_path) and os.path.getsize(font_path) < 10000:
+        os.remove(font_path)
+        
     ensure_font_downloaded(font_url, font_path)
     try:
         return ImageFont.truetype(font_path, size)
-    except Exception:
-        return ImageFont.load_default()
+    except Exception as e:
+        logging.warning(f"Failed to load downloaded font, falling back to Impact/Arial. Error: {e}")
+        try:
+            # Fallback to standard Windows bold font
+            return ImageFont.truetype("impact.ttf", size)
+        except Exception:
+            try:
+                return ImageFont.truetype("arialbd.ttf", size)
+            except Exception:
+                return ImageFont.load_default()
 
 def center_crop(img, target_w, target_h):
     """
