@@ -89,12 +89,11 @@ def draw_gradient(image, top_y, bottom_y, color_start=(0,0,0,0), color_end=(0,0,
         a = int(color_start[3] + ratio * (color_end[3] - color_start[3]))
         draw.line([(0, top_y + i), (image.width, top_y + i)], fill=(r,g,b,a))
 
-def render_multicolor_text_centered(draw, text, y_pos, font, max_width, img_width):
+def render_multicolor_text_centered(draw, text, y_pos, font, max_width, img_width, dry_run=False):
     """
-    Renders text centered. Words wrapped in * are yellow (#FFFF00), others white (#FFFFFF).
-    Returns the new y_pos.
+    Renders text centered, wrapping it, and colors *asterisk* text in yellow.
+    If dry_run is True, it doesn't draw anything, just returns the total height of the text block.
     """
-    # Simple word wrapping
     words = text.split()
     lines = []
     current_line = []
@@ -118,6 +117,20 @@ def render_multicolor_text_centered(draw, text, y_pos, font, max_width, img_widt
         lines.append(current_line)
         
     line_spacing = 10
+    total_height = 0
+    
+    # Calculate line height
+    try:
+        bbox_A = draw.textbbox((0, 0), "A", font=font)
+        line_height = bbox_A[3] - bbox_A[1]
+    except AttributeError:
+        line_height = draw.textsize("A", font=font)[1]
+    
+    actual_line_height = line_height * 0.95 + line_spacing
+    total_height = len(lines) * actual_line_height
+    
+    if dry_run:
+        return total_height
     
     for line_words in lines:
         line_width = get_line_width(line_words)
@@ -141,14 +154,7 @@ def render_multicolor_text_centered(draw, text, y_pos, font, max_width, img_widt
                 
             x_pos += word_w + space_w
             
-        try:
-            bbox_A = draw.textbbox((0, 0), "A", font=font)
-            line_height = bbox_A[3] - bbox_A[1]
-        except AttributeError:
-            line_height = draw.textsize("A", font=font)[1]
-            
-        # Tighter line spacing for Anton font
-        y_pos += line_height * 0.95 + line_spacing
+        y_pos += actual_line_height
         
     return y_pos
 
@@ -213,24 +219,7 @@ def create_facebook_post(image_url, image_url_2, headline, source_name="IGN", ou
         except Exception as e:
             logging.error(f"Failed to load banner: {e}")
             
-    # 4. HOLLYWOOD FLASH Badge
-    badge_text = "HOLLYWOOD FLASH"
-    badge_font = get_font("roboto", size=20)
-    try:
-        bbox_badge = draw.textbbox((0, 0), badge_text, font=badge_font)
-        tw = bbox_badge[2] - bbox_badge[0]
-    except AttributeError:
-        tw = draw.textsize(badge_text, font=badge_font)[0]
-        
-    badge_w = tw + 30
-    badge_h = 35
-    badge_x = (base_width - badge_w) // 2
-    badge_y = 800
-    draw.rounded_rectangle([badge_x, badge_y, badge_x + badge_w, badge_y + badge_h], radius=6, fill="#E0FF00")
-    
-    draw.text((badge_x + 15, badge_y + 8), badge_text, font=badge_font, fill="#000000")
-    
-    # 5. Headline
+    # 4. Determine font size
     headline_length = len(headline)
     if headline_length < 40:
         font_size = 130
@@ -242,11 +231,38 @@ def create_facebook_post(image_url, image_url_2, headline, source_name="IGN", ou
         font_size = 64
         
     headline_font = get_font("anton", size=font_size)
-    # The headline comes with *keyword* from LLM
-    text_start_y = 860
+    
+    # Calculate text height to bottom-align
     margin = 40
     max_text_width = base_width - (margin * 2)
+    text_total_height = render_multicolor_text_centered(draw, headline, 0, headline_font, max_text_width, base_width, dry_run=True)
     
+    # Bottom margin padding
+    bottom_padding = 60
+    
+    # 5. Position Elements (Bottom-aligned)
+    # The text ends at (base_height - bottom_padding)
+    text_start_y = base_height - bottom_padding - text_total_height
+    
+    # Badge sits above the text
+    badge_text = "HOLLYWOOD FLASH"
+    badge_font = get_font("roboto", size=20)
+    try:
+        bbox_badge = draw.textbbox((0, 0), badge_text, font=badge_font)
+        tw = bbox_badge[2] - bbox_badge[0]
+    except AttributeError:
+        tw = draw.textsize(badge_text, font=badge_font)[0]
+        
+    badge_w = tw + 30
+    badge_h = 35
+    badge_x = (base_width - badge_w) // 2
+    badge_y = text_start_y - badge_h - 25
+    
+    # Draw badge
+    draw.rounded_rectangle([badge_x, badge_y, badge_x + badge_w, badge_y + badge_h], radius=6, fill="#E0FF00")
+    draw.text((badge_x + 15, badge_y + 8), badge_text, font=badge_font, fill="#000000")
+    
+    # Draw Headline
     render_multicolor_text_centered(draw, headline, text_start_y, headline_font, max_text_width, base_width)
     
     # 6. Source Footer (Removed per user request)
