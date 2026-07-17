@@ -219,7 +219,17 @@ def create_facebook_post(image_url, image_url_2, headline, source_name="IGN", ou
     draw.text((badge_x + 15, badge_y + 8), badge_text, font=badge_font, fill="#000000")
     
     # 5. Headline
-    headline_font = get_font("anton", size=130)
+    headline_length = len(headline)
+    if headline_length < 40:
+        font_size = 130
+    elif headline_length < 70:
+        font_size = 100
+    elif headline_length < 100:
+        font_size = 80
+    else:
+        font_size = 64
+        
+    headline_font = get_font("anton", size=font_size)
     # The headline comes with *keyword* from LLM
     text_start_y = 860
     margin = 40
