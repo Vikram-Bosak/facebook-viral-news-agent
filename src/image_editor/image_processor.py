@@ -22,6 +22,28 @@ def get_font(name="anton", size=40):
     if name == "anton":
         font_path = "assets/fonts/Anton-Regular.ttf"
         font_url = "https://github.com/googlefonts/anton/raw/main/fonts/ttf/Anton-Regular.ttf"
+        if not os.path.exists(font_path) or os.path.getsize(font_path) < 10000: # Check if corrupted
+            import requests
+            try:
+                logging.info(f"Downloading {name} font from {font_url}...")
+                r = requests.get(font_url)
+                r.raise_for_status()
+                with open(font_path, "wb") as f:
+                    f.write(r.content)
+            except Exception as e:
+                logging.warning(f"Failed to download font: {e}")
+        try:
+            font = ImageFont.truetype(font_path, size)
+            return font
+        except Exception as e:
+            logging.warning(f"Failed to load downloaded font, falling back to Impact/Arial. Error: {e}")
+            try:
+                return ImageFont.truetype("impact.ttf", size)
+            except Exception:
+                try:
+                    return ImageFont.truetype("arialbd.ttf", size)
+                except Exception:
+                    return ImageFont.load_default()
     elif name == "roboto":
         font_path = "assets/fonts/Roboto-Bold.ttf"
         font_url = "https://github.com/googlefonts/roboto/raw/main/src/hinted/Roboto-Bold.ttf"
