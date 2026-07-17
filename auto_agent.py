@@ -94,10 +94,33 @@ def job():
         upload_success, fb_post_id = upload_to_facebook(processed_img_path, facebook_caption)
         
         # 5. Discord Report
-        report = f"""**Successfully posted to Facebook!**
-**Headline:** {headline}
-**Style:** {style}
-**Facebook Post ID:** {fb_post_id}
+        page_id = os.getenv("FACEBOOK_PAGE_ID", "1094922960379153")
+        status_text = "Success" if upload_success else "Failed"
+        post_url = f"https://www.facebook.com/{page_id}/posts/{fb_post_id}" if upload_success else "N/A"
+        
+        report = f"""✅ Pipeline Run Completed
+
+🎬 Photo Name:
+{headline} 🚀
+
+📤 Facebook Upload Status: {status_text}
+
+🏷️ SEO Title:
+{headline}
+
+📝 Description:
+{facebook_caption}
+
+Original File: {os.path.basename(processed_img_path)}
+
+🔗 Facebook Photo Post URL:
+{post_url}
+
+📦 GitHub Repository:
+https://github.com/Vikram-Bosak/facebook-viral-news-agent
+
+📄 Source Article:
+{source_url}
 """
         send_discord_report(processed_img_path, report)
 
