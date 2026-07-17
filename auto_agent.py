@@ -14,11 +14,25 @@ from src.discord.discord_reporter import send_discord_report
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def load_processed_trends():
+def normalize_title(title):
+    """Normalize title for comparison by removing non-alphanumeric chars and lowercasing."""
+    return re.sub(r'[^a-z0-9]', '', title.lower())
+
+def is_trend_processed(trend):
+    """Check if the trend has already been processed today."""
     if not os.path.exists("output/processed_news.txt"):
-        return set()
+        return False
+        
+    norm_trend = normalize_title(trend)
+    
     with open("output/processed_news.txt", "r", encoding="utf-8") as f:
-        return set(line.strip() for line in f)
+        processed = f.read().splitlines()
+        
+    for p in processed:
+        if normalize_title(p) == norm_trend:
+            return True
+            
+    return False
 
 def save_processed_trend(trend_title):
     os.makedirs("output", exist_ok=True)
@@ -32,11 +46,9 @@ def job():
         logging.info("No fresh articles found within the last 2 hours.")
         return
 
-    processed = load_processed_trends()
-    
     for item in news_items:
         title = item["title"]
-        if title in processed:
+        if is_trend_processed(title):
             continue
             
         logging.info(f"Processing new article: {title}")
