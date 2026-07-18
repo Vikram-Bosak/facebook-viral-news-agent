@@ -31,7 +31,9 @@ def is_trend_processed(trend):
         processed = f.read().splitlines()
         
     for p in processed:
-        if normalize_title(p) == norm_trend:
+        norm_p = normalize_title(p)
+        # Check if the exact title matches or if one is a substantial substring of the other
+        if norm_p == norm_trend or (len(norm_p) > 15 and norm_p in norm_trend) or (len(norm_trend) > 15 and norm_trend in norm_p):
             return True
             
     return False
