@@ -2,7 +2,7 @@
 
 ![Banner Placeholder](https://via.placeholder.com/1080x200?text=Hollywood+Viral+News+Agent)
 
-An automated, cloud-based Python agent that monitors CNN Entertainment for the latest Hollywood trends, uses an advanced LLM to generate viral-style copy, designs a Facebook poster, uploads it to Google Drive, and notifies you via Telegram.
+An automated, cloud-based Python agent that monitors CNN Entertainment for the latest Hollywood trends, uses an advanced LLM to generate viral-style copy, designs a Facebook poster, uploads it to Facebook directly, and notifies you via Discord.
 
 ## Features
 - **24x7 Automation**: Runs exactly 6 times a day (US EST) using GitHub Actions.
@@ -10,7 +10,7 @@ An automated, cloud-based Python agent that monitors CNN Entertainment for the l
 - **AI Copywriting**: Integrates NVIDIA Nemotron LLM to generate click-worthy headlines and viral hooks in American English.
 - **Dynamic Image Editing**: Automatically downloads featured images, applies dark gradient overlays, adds drop-shadow typography, highlights key words in yellow, and brands the image with your logo.
 - **Cloud Storage**: Instantly uploads the final image to Google Drive and sets public access permissions.
-- **Instant Notifications**: Sends an HTML-formatted Telegram message with the public Drive link right after generation.
+- **Instant Notifications**: Sends an automated Discord message with the Facebook post details right after generation.
 
 ## System Architecture
 ```mermaid
@@ -19,7 +19,7 @@ graph LR
     B --> C{Analyzer LLM}
     C --> D[Image Editor]
     D --> E[(Google Drive)]
-    E --> F[Telegram Bot]
+    E --> F[Discord Webhook]
 ```
 
 ## Folder Structure
@@ -36,7 +36,7 @@ project-root/
 │   ├── image_editor/   # Poster Generation (Pillow)
 │   ├── scraper/        # RSS Parsing
 │   ├── storage/        # Google Drive Integration
-│   └── telegram/       # Bot Notifications
+│   └── discord/        # Discord Notifications
 ├── .env.example
 ├── main.py
 └── README.md
@@ -55,8 +55,7 @@ If you want to run this locally:
 This project requires several environment variables to function correctly. Rename `.env.example` to `.env` and fill in the details:
 
 ```env
-TELEGRAM_BOT_TOKEN="your_telegram_bot_token"
-TELEGRAM_CHAT_ID="your_telegram_chat_id"
+DISCORD_WEBHOOK_URL="your_discord_webhook_url"
 GOOGLE_DRIVE_FOLDER_ID="your_google_drive_folder_id"
 GOOGLE_APPLICATION_CREDENTIALS="service_account.json"
 NVIDIA_API_KEY="your_nvidia_api_key"
@@ -69,8 +68,7 @@ The entire workflow runs seamlessly on GitHub Actions. To set this up in your ow
 
 1. Go to your GitHub Repository -> **Settings** -> **Secrets and variables** -> **Actions**.
 2. Add the following **Repository Secrets**:
-   - `TELEGRAM_BOT_TOKEN`: Your Telegram Bot Token.
-   - `TELEGRAM_CHAT_ID`: Your Telegram Chat ID.
+   - `DISCORD_WEBHOOK_URL`: Your Discord Webhook URL for reports.
    - `GOOGLE_DRIVE_FOLDER_ID`: The Folder ID from your Google Drive URL.
    - `GOOGLE_CREDENTIALS_JSON`: Paste the ENTIRE content of your `service_account.json` file here.
    - `NVIDIA_API_KEY`: Your Nvidia Nemotron API key.
@@ -84,7 +82,7 @@ Once the repository is pushed and secrets are configured:
 
 ## Troubleshooting
 
-- **No Telegram Messages**: Ensure your `TELEGRAM_CHAT_ID` is correct and you have started a conversation with the bot.
+- **No Discord Messages**: Ensure your `DISCORD_WEBHOOK_URL` is correct.
 - **Drive Upload Failed**: Ensure the `service_account.json` belongs to an account that has Editor access to the specific Google Drive folder.
 
 ## License Information

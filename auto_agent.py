@@ -3,6 +3,7 @@ import re
 import time
 import logging
 import pytz
+import random
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -109,10 +110,15 @@ def job():
             logging.warning("LLM caption generation failed. Using fallback template.")
             facebook_caption = f"🚨 Hollywood Update! 🚨\n\n{title}\n\nStay tuned for more updates! 👇\n#HollywoodNews #CelebrityBuzz #Trending #Entertainment #News"
 
-        # 4. Upload to Facebook
+        # 4. Human-like Delay before Upload
+        sleep_time = random.randint(60, 300) # Random delay between 1 to 5 minutes
+        logging.info(f"Human-like Jitter: Waiting for {sleep_time} seconds before posting to Facebook...")
+        time.sleep(sleep_time)
+
+        # 5. Upload to Facebook
         upload_success, fb_post_id = upload_to_facebook(processed_img_path, facebook_caption)
         
-        # 5. Discord Report
+        # 6. Discord Report
         page_id = os.getenv("FACEBOOK_PAGE_ID", "1094922960379153")
         status_text = "Success" if upload_success else "Failed"
         post_url = f"https://www.facebook.com/{page_id}/posts/{fb_post_id}" if upload_success else "N/A"
