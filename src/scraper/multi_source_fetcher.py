@@ -46,6 +46,12 @@ def get_latest_entertainment_news(max_age_hours=2):
                 title = entry.title
                 link = entry.link
                 description = getattr(entry, 'description', '')
+                
+                # Check for Bollywood keyword and skip if found
+                if 'bollywood' in title.lower() or 'bollywood' in description.lower():
+                    logging.info(f"Skipping Bollywood news: {title}")
+                    continue
+                    
                 image_url = None
                 
                 # 1. Try media_content
