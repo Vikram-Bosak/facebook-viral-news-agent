@@ -309,25 +309,27 @@ def create_facebook_post(image_url, image_url_2, headline, source_name="IGN", ou
     draw.rectangle([(0, 1050), (base_width, base_height)], fill="#0B0C10")
     
     # 2. Position Circular Badge completely inside the photo area (centered vertically in the photo zone)
-    badge_size = 300
-    pos_y = int(700 - badge_size // 2) # Centered at y=700 (ends at y=850, well above black zone at y=950)
-    
-    # Check headline to alternate sides dynamically
-    if len(headline) % 2 == 0:
-        pos_x = 70
-    else:
-        pos_x = base_width - badge_size - 70
+    # Only draw circle badge if circle_image_url is valid and not None
+    if circle_image_url:
+        badge_size = 300
+        pos_y = int(700 - badge_size // 2) # Centered at y=700 (ends at y=850, well above black zone at y=950)
         
-    pos_x = int(pos_x)
-    pos_y = int(pos_y)
-        
-    draw_circular_badge(
-        base_img, 
-        flag_url_or_path=circle_image_url or "https://flagcdn.com/w640/us.png", 
-        size=badge_size, 
-        pos_x=pos_x, 
-        pos_y=pos_y
-    )
+        # Check headline to alternate sides dynamically
+        if len(headline) % 2 == 0:
+            pos_x = 70
+        else:
+            pos_x = base_width - badge_size - 70
+            
+        pos_x = int(pos_x)
+        pos_y = int(pos_y)
+            
+        draw_circular_badge(
+            base_img, 
+            flag_url_or_path=circle_image_url, 
+            size=badge_size, 
+            pos_x=pos_x, 
+            pos_y=pos_y
+        )
     
     # 3. Format and Position Text (Centered All-Caps Fact Details)
     # Combine headline and hook into a single block of uppercase text
