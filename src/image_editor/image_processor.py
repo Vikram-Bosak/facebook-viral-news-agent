@@ -1,7 +1,7 @@
 import os
 import requests
 from io import BytesIO
-from PIL import Image, ImageDraw, ImageFont, ImageOps, ImageEnhance
+from PIL import Image, ImageDraw, ImageFont, ImageOps, ImageEnhance, ImageFilter
 import logging
 import numpy as np
 import re
@@ -111,25 +111,71 @@ def draw_gradient(image, top_y, bottom_y, color_start=(0,0,0,0), color_end=(0,0,
         a = int(color_start[3] + ratio * (color_end[3] - color_start[3]))
         draw.line([(0, top_y + i), (image.width, top_y + i)], fill=(r,g,b,a))
 
+def draw_circular_badge(base_img, flag_url_or_path, size=300, pos_x=70, pos_y=600):
+    badge_img = fetch_image(flag_url_or_path)
+    if not badge_img:
+        # Fallback to a solid circle if loading fails
+        badge_img = Image.new('RGB', (size, size), "#FF3366")
+        
+    # Fit the image entirely inside the circular badge (Fit to Circle) without cropping any part
+    badge_img.thumbnail((size, size), Image.Resampling.LANCZOS)
+    
+    # Create a square background image and paste the resized image centered
+    square_img = Image.new('RGB', (size, size), "#000000")
+    w, h = badge_img.size
+    square_img.paste(badge_img, ((size - w) // 2, (size - h) // 2))
+    badge_img = square_img
+    
+    # Create a circular mask
+    mask = Image.new('L', (size, size), 0)
+    draw_mask = ImageDraw.Draw(mask)
+    draw_mask.ellipse((0, 0, size, size), fill=255)
+    
+    # Convert badge to RGBA
+    circular_badge = Image.new('RGBA', (size, size), (0,0,0,0))
+    circular_badge.paste(badge_img.convert("RGBA"), (0, 0), mask)
+    
+    # Draw a nice white border around the circle
+    draw_border = ImageDraw.Draw(circular_badge)
+    draw_border.ellipse((0, 0, size, size), outline="#FFFFFF", width=4)
+    
+    # Draw drop shadow for the "embedded" ("fansa hua") effect
+    shadow_size = size + 30
+    shadow = Image.new('RGBA', (shadow_size, shadow_size), (0,0,0,0))
+    draw_shadow = ImageDraw.Draw(shadow)
+    # Soft black circle for shadow
+    shadow_offset = 15
+    draw_shadow.ellipse((0, 0, shadow_size, shadow_size), fill=(0, 0, 0, 180))
+    # Blur the shadow circle
+    shadow = shadow.filter(ImageFilter.GaussianBlur(15))
+    
+    # Paste shadow then badge
+    base_img.paste(shadow, (pos_x - shadow_offset, pos_y - shadow_offset), shadow)
+    base_img.paste(circular_badge, (pos_x, pos_y), circular_badge)
+
+
+
 def render_multicolor_text_centered(draw, text, y_pos, font, max_width, img_width, dry_run=False):
     """
-    Renders text centered, wrapping it, and colors *asterisk* text in yellow.
-    If dry_run is True, it doesn't draw anything, just returns the total height of the text block.
+    Renders text centered, wrapping it, with line spacing (0.9).
     """
     # Parse tokens and their highlight states
     tokens = []
     in_highlight = False
+    highlight_idx = -1
     for word in text.split():
         # Check start (ignore leading punctuation like quotes)
         if "*" in word and word.find("*") < len(word) / 2:
-            in_highlight = True
+            if not in_highlight:
+                in_highlight = True
+                highlight_idx += 1
             
         # Check end (asterisk could be before trailing punctuation)
         ends_with = "*" in word[len(word)//2:] and len(word) > 1
         
         clean_word = word.replace("*", "")
         
-        tokens.append({"text": clean_word, "highlight": in_highlight})
+        tokens.append({"text": clean_word, "highlight": in_highlight, "color_idx": highlight_idx})
         
         if ends_with:
             in_highlight = False
@@ -137,13 +183,24 @@ def render_multicolor_text_centered(draw, text, y_pos, font, max_width, img_widt
     lines = []
     current_line = []
     
-    def get_line_width(line_tokens):
-        clean_text = " ".join([t["text"] for t in line_tokens])
+    def get_word_width(word):
         try:
-            bbox = draw.textbbox((0, 0), clean_text, font=font)
-            return bbox[2] - bbox[0]
+            bbox_word = draw.textbbox((0, 0), word, font=font)
+            return bbox_word[2] - bbox_word[0]
         except AttributeError:
-            return draw.textsize(clean_text, font=font)[0]
+            return draw.textsize(word, font=font)[0]
+        
+    try:
+        space_w = draw.textbbox((0, 0), " ", font=font)[2] - draw.textbbox((0, 0), " ", font=font)[0]
+    except AttributeError:
+        space_w = draw.textsize(" ", font=font)[0]
+        
+    def get_line_width(line_tokens):
+        if not line_tokens:
+            return 0
+        total = sum(get_word_width(t["text"]) for t in line_tokens)
+        total += space_w * (len(line_tokens) - 1)
+        return total
 
     for token in tokens:
         current_line.append(token)
@@ -154,17 +211,19 @@ def render_multicolor_text_centered(draw, text, y_pos, font, max_width, img_widt
     if current_line:
         lines.append(current_line)
         
-    line_spacing = 10
-    total_height = 0
-    
-    # Calculate line height
+    # Calculate line height using ascent + descent
     try:
-        bbox_A = draw.textbbox((0, 0), "A", font=font)
-        line_height = bbox_A[3] - bbox_A[1]
-    except AttributeError:
-        line_height = draw.textsize("A", font=font)[1]
+        ascent, descent = font.getmetrics()
+        line_height = ascent + descent
+    except Exception:
+        try:
+            bbox_A = draw.textbbox((0, 0), "hg", font=font)
+            line_height = bbox_A[3] - bbox_A[1]
+        except AttributeError:
+            line_height = draw.textsize("hg", font=font)[1]
     
-    actual_line_height = line_height * 0.95 + line_spacing
+    # Line spacing is exactly 0.9 of line height
+    actual_line_height = line_height * 0.9
     total_height = len(lines) * actual_line_height
     
     if dry_run:
@@ -176,37 +235,37 @@ def render_multicolor_text_centered(draw, text, y_pos, font, max_width, img_widt
         
         for token in line_tokens:
             clean_word = token["text"]
-            color = "#E0FF00" if token["highlight"] else "#FFFFFF" # Yellow/Greenish highlight
+            if token["highlight"]:
+                # Premium multicolor palette (Orange/Red, Blue, Green, Yellow)
+                HIGHLIGHT_COLORS = ["#FF5733", "#00BFFF", "#2ECC71", "#FFD700"]
+                color = HIGHLIGHT_COLORS[token["color_idx"] % len(HIGHLIGHT_COLORS)]
+            else:
+                color = "#FFFFFF"
             
+            # Draw full word directly to ensure perfect anti-aliasing and sharpness
             draw.text((x_pos, y_pos), clean_word, font=font, fill=color)
-            
-            try:
-                bbox_word = draw.textbbox((0, 0), clean_word, font=font)
-                word_w = bbox_word[2] - bbox_word[0]
-                bbox_space = draw.textbbox((0, 0), " ", font=font)
-                space_w = bbox_space[2] - bbox_space[0]
-            except AttributeError:
-                word_w = draw.textsize(clean_word, font=font)[0]
-                space_w = draw.textsize(" ", font=font)[0]
-                
-            x_pos += word_w + space_w
+            x_pos += get_word_width(clean_word) + space_w
             
         y_pos += actual_line_height
         
     return y_pos
 
-def create_facebook_post(image_url, image_url_2, headline, source_name="IGN", output_path="output.jpg", logo_path="assets/logo.png", hook_text=""):
+def create_facebook_post(image_url, image_url_2, headline, source_name="IGN", output_path="output.jpg", logo_path="assets/logo.png", hook_text="", circle_image_url=None):
+    # If circle_image_url is not explicitly passed, use image_url_2 as the circular badge if present,
+    # and clear image_url_2 so the main layout remains a premium single full image.
+    if not circle_image_url and image_url_2:
+        circle_image_url = image_url_2
+        image_url_2 = None
+        
     # Premium Layout Dimensions: 1080 x 1350
     base_width, base_height = 1080, 1350
-    img_area_height = 950
-    bg_color = "#0B0C10" # Dark bottom
+    bg_color = "#0B0C10" # Solid dark bottom background
     
     base_img = Image.new('RGB', (base_width, base_height), color=bg_color)
     
     # 1. Process Images (Split Screen or Single)
     img1 = fetch_image(image_url) if image_url else None
     img2 = fetch_image(image_url_2) if image_url_2 else None
-    
     
     # Apply Copyright Safety Logic (Horizontal Flip + Minor Brightness Jitter)
     def apply_safety(img):
@@ -222,105 +281,119 @@ def create_facebook_post(image_url, image_url_2, headline, source_name="IGN", ou
     if img1 and img2:
         # Split screen: left and right
         w1, w2 = 540, 540
-        img1_cropped = center_crop(img1, w1, img_area_height)
-        img2_cropped = center_crop(img2, w2, img_area_height)
+        img1_cropped = center_crop(img1, w1, base_height)
+        img2_cropped = center_crop(img2, w2, base_height)
         base_img.paste(img1_cropped, (0, 0))
         base_img.paste(img2_cropped, (w1, 0))
         
         # Add a subtle black divider line
         draw_temp = ImageDraw.Draw(base_img)
-        draw_temp.line([(w1, 0), (w1, img_area_height)], fill="#000000", width=4)
-        
+        draw_temp.line([(w1, 0), (w1, base_height)], fill="#000000", width=4)
     elif img1:
-        # Single image
-        img1_cropped = center_crop(img1, base_width, img_area_height)
+        # Full screen background image (slightly blurred)
+        img1_blurred = img1.filter(ImageFilter.GaussianBlur(3))
+        img1_cropped = center_crop(img1_blurred, base_width, base_height)
         base_img.paste(img1_cropped, (0, 0))
     else:
         # Fallback empty
         pass
         
-    # From y=600 to y=1050 for a taller gradient for bigger text
-    draw_gradient(base_img, 600, 1050, color_start=(11,12,16,0), color_end=(11,12,16,255))
-    
-    # Needs RGBA composite for gradient to work if base is RGB, actually draw_gradient on RGB will just draw opaque if we don't use alpha composite.
-    # Let's fix gradient by creating an overlay
-    overlay = Image.new('RGBA', (base_width, base_height), (0,0,0,0))
-    draw_gradient(overlay, 600, 1050, color_start=(11,12,16,0), color_end=(11,12,16,255))
-    base_img = Image.alpha_composite(base_img.convert('RGBA'), overlay).convert('RGB')
-    
-    draw = ImageDraw.Draw(base_img)
-    
-    import re
-    # Sanitize headline to prevent missing glyph boxes (emojis, etc)
-    headline = headline.replace("’", "'").replace("“", '"').replace("”", '"')
-    headline = re.sub(r'[^\x00-\x7F]+', '', headline)
-    
-    # 4. Determine font size
-    headline_length = len(headline)
-    if headline_length < 40:
-        font_size = 110
-    elif headline_length < 70:
-        font_size = 85
-    elif headline_length < 100:
-        font_size = 68
+    # 3. Format and Position Text (Centered All-Caps Fact Details)
+    # Combine headline and hook into a single block of uppercase text
+    if hook_text:
+        combined_text = f"{headline} {hook_text}".upper()
     else:
-        font_size = 54
+        combined_text = headline.upper()
         
-    headline_font = get_font("anton", size=font_size)
+    # Sanitize combined text
+    combined_text = combined_text.replace("’", "'").replace("“", '"').replace("”", '"')
+    combined_text = re.sub(r'[^\x00-\x7F*]+', '', combined_text)
     
-    # Calculate text height to bottom-align
-    margin = 40
+    # Use Anton font at 110px size (Double the actual readable size from previous output)
+    font_size = 110
+    text_font = get_font("anton", size=font_size)
+    
+    margin = 50
     max_text_width = base_width - (margin * 2)
-    text_total_height = render_multicolor_text_centered(draw, headline, 0, headline_font, max_text_width, base_width, dry_run=True)
     
-    # Add hook_text height
-    hook_font = get_font("roboto", size=35)
-    hook_text_height = 0
-    if hook_text:
-        hook_text = hook_text.replace("*", "") # Remove bold markers
-        hook_text_height = render_multicolor_text_centered(draw, hook_text, 0, hook_font, max_text_width - 40, base_width, dry_run=True) + 20
-        text_total_height += hook_text_height
+    # Measure text block height using a temporary draw context
+    temp_draw = ImageDraw.Draw(base_img)
+    text_total_height = render_multicolor_text_centered(temp_draw, combined_text, 0, text_font, max_text_width, base_width, dry_run=True)
     
-    # Bottom margin padding
-    bottom_padding = 60
+    # If it is too tall for the safe zone (height > 380px), scale down size dynamically to prevent overflow
+    if text_total_height > 380:
+        font_size = int(110 * (380 / text_total_height))
+        text_font = get_font("anton", size=font_size)
+        text_total_height = render_multicolor_text_centered(temp_draw, combined_text, 0, text_font, max_text_width, base_width, dry_run=True)
     
-    # 5. Position Elements (Bottom-aligned)
-    # The text ends at (base_height - bottom_padding)
-    text_start_y = base_height - bottom_padding - text_total_height
+    # Vertically center text in the bottom black block (between y=890 and y=1280)
+    text_start_y = int(890 + (1280 - 890 - text_total_height) // 2)
+    if text_start_y < 890:
+        text_start_y = 890
+        
+    # Draw a solid black rectangle starting exactly at text_start_y - 40 to the bottom of the canvas
+    draw = ImageDraw.Draw(base_img)
+    draw.rectangle([(0, text_start_y - 40), (base_width, base_height)], fill="#0B0C10")
+            
+    # Country flag badge drawing removed by user request
     
-    # Paste uploaded logo image above the text
-    banner_path = "assets/logo/banner.png"
-    if os.path.exists(banner_path):
+    # 2. Position Circular Badge completely inside the photo area (centered vertically in the photo zone)
+    badge_size = 300
+    pos_y = int((text_start_y - 40) - badge_size - 20) # Sits fully inside photo zone with a 20px gap from black box
+    
+    # Check headline to alternate sides dynamically
+    if len(headline) % 2 == 0:
+        pos_x = 70
+    else:
+        pos_x = base_width - badge_size - 70
+        
+    pos_x = int(pos_x)
+    pos_y = int(pos_y)
+        
+    draw_circular_badge(
+        base_img, 
+        flag_url_or_path=circle_image_url or "https://flagcdn.com/w640/us.png", 
+        size=badge_size, 
+        pos_x=pos_x, 
+        pos_y=pos_y
+    )
+    
+    # Draw the text on the solid black area (guaranteed gap from circle)
+    render_multicolor_text_centered(draw, combined_text, text_start_y, text_font, max_text_width, base_width)
+    
+    # 4. Draw Divider Line & Centered Logo at the very bottom
+    bottom_line_y = 1300
+    draw.line([(40, bottom_line_y), (base_width - 40, bottom_line_y)], fill="#FFFFFF", width=2)
+    
+    # Center logo badge on bottom line
+    avatar_size = 80
+    if os.path.exists(logo_path):
         try:
-            banner = Image.open(banner_path).convert("RGBA")
-            bw, bh = banner.size
-            # The logo from user is a wide banner, let's make it larger (e.g. 500px wide)
-            new_bw = 500
-            new_bh = int(bh * (new_bw / bw))
-            banner = banner.resize((new_bw, new_bh), Image.Resampling.LANCZOS)
+            avatar_img = Image.open(logo_path).convert("RGBA")
+            avatar_img = center_crop(avatar_img, avatar_size, avatar_size)
             
-            bx = int((base_width - new_bw) // 2)
-            by = int(text_start_y - new_bh - 25)
-            base_img.paste(banner, (bx, by), banner)
+            mask_avatar = Image.new('L', (avatar_size, avatar_size), 0)
+            draw_mask_avatar = ImageDraw.Draw(mask_avatar)
+            draw_mask_avatar.ellipse((0, 0, avatar_size, avatar_size), fill=255)
+            
+            circular_avatar = Image.new('RGBA', (avatar_size, avatar_size), (0,0,0,0))
+            circular_avatar.paste(avatar_img, (0,0), mask_avatar)
+            
+            # White border around logo avatar
+            draw_avatar_border = ImageDraw.Draw(circular_avatar)
+            draw_avatar_border.ellipse((0, 0, avatar_size, avatar_size), outline="#FFFFFF", width=2)
+            
+            ax = (base_width - avatar_size) // 2
+            ay = bottom_line_y - avatar_size // 2
+            base_img.paste(circular_avatar, (ax, ay), circular_avatar)
         except Exception as e:
-            logging.error(f"Failed to paste banner: {e}")
+            logging.error(f"Failed to draw bottom circular avatar: {e}")
             
-    # Finally draw the text
-    current_y = text_start_y
-    # Draw Headline
-    headline_height = render_multicolor_text_centered(draw, headline, current_y, headline_font, max_text_width, base_width)
-    current_y += headline_height + 20
-    
-    # Draw Hook Text (Detailed Description)
-    if hook_text:
-        render_multicolor_text_centered(draw, hook_text, current_y, hook_font, max_text_width - 40, base_width)
-    
-    # Ensure directory
+    # Ensure output directory exists
     dir_name = os.path.dirname(output_path)
     if dir_name:
         os.makedirs(dir_name, exist_ok=True)
-    
-    
+        
     # Save Image
     base_img.save(output_path, quality=95)
     logging.info(f"Image saved to {output_path} with split screen layout.")
