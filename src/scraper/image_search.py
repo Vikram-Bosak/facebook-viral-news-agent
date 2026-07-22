@@ -38,7 +38,9 @@ def get_related_image(keyword, avoid_url=None):
     """
     clean_keyword = re.sub(r"[‘’“”\"']", "", keyword)
     words = [w for w in clean_keyword.split() if w]
-    query = " ".join(words[:4]) if len(words) > 4 else " ".join(words)
+    stop_words = {"to", "joins", "star", "in", "for", "gets", "with", "from", "on", "at", "by", "of", "and", "a", "an", "the", "about", "set", "is", "are", "was", "were", "to", "star", "direct", "talks"}
+    filtered_words = [w for w in words if w.lower() not in stop_words]
+    query = " ".join(filtered_words[:4]) if len(filtered_words) > 4 else " ".join(filtered_words)
     
     logging.info(f"Searching for related image using query: '{query}'")
     
