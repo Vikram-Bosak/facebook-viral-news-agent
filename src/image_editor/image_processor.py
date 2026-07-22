@@ -298,48 +298,19 @@ def create_facebook_post(image_url, image_url_2, headline, source_name="IGN", ou
         # Fallback empty
         pass
         
-    # 3. Format and Position Text (Centered All-Caps Fact Details)
-    # Combine headline and hook into a single block of uppercase text
-    if hook_text:
-        combined_text = f"{headline} {hook_text}".upper()
-    else:
-        combined_text = headline.upper()
-        
-    # Sanitize combined text
-    combined_text = combined_text.replace("’", "'").replace("“", '"').replace("”", '"')
-    combined_text = re.sub(r'[^\x00-\x7F*]+', '', combined_text)
+    # Draw vertical gradient overlay from y=600 to y=1050 over the photo area
+    overlay = Image.new('RGBA', (base_width, base_height), (0,0,0,0))
+    draw_gradient(overlay, 600, 1050, color_start=(11,12,16,0), color_end=(11,12,16,255))
+    base_img = Image.alpha_composite(base_img.convert('RGBA'), overlay).convert('RGB')
     
-    # Use Anton font at 110px size (Double the actual readable size from previous output)
-    font_size = 110
-    text_font = get_font("anton", size=font_size)
-    
-    margin = 50
-    max_text_width = base_width - (margin * 2)
-    
-    # Measure text block height using a temporary draw context
-    temp_draw = ImageDraw.Draw(base_img)
-    text_total_height = render_multicolor_text_centered(temp_draw, combined_text, 0, text_font, max_text_width, base_width, dry_run=True)
-    
-    # If it is too tall for the safe zone (height > 380px), scale down size dynamically to prevent overflow
-    if text_total_height > 380:
-        font_size = int(110 * (380 / text_total_height))
-        text_font = get_font("anton", size=font_size)
-        text_total_height = render_multicolor_text_centered(temp_draw, combined_text, 0, text_font, max_text_width, base_width, dry_run=True)
-    
-    # Vertically center text in the bottom black block (between y=890 and y=1280)
-    text_start_y = int(890 + (1280 - 890 - text_total_height) // 2)
-    if text_start_y < 890:
-        text_start_y = 890
-        
-    # Draw a solid black rectangle starting exactly at text_start_y - 40 to the bottom of the canvas
     draw = ImageDraw.Draw(base_img)
-    draw.rectangle([(0, text_start_y - 40), (base_width, base_height)], fill="#0B0C10")
-            
-    # Country flag badge drawing removed by user request
+    
+    # Draw solid black background for text area below y=1050
+    draw.rectangle([(0, 1050), (base_width, base_height)], fill="#0B0C10")
     
     # 2. Position Circular Badge completely inside the photo area (centered vertically in the photo zone)
     badge_size = 300
-    pos_y = int((text_start_y - 40) - badge_size - 20) # Sits fully inside photo zone with a 20px gap from black box
+    pos_y = int(700 - badge_size // 2) # Centered at y=700 (ends at y=850, well above black zone at y=950)
     
     # Check headline to alternate sides dynamically
     if len(headline) % 2 == 0:
@@ -358,37 +329,61 @@ def create_facebook_post(image_url, image_url_2, headline, source_name="IGN", ou
         pos_y=pos_y
     )
     
-    # Draw the text on the solid black area (guaranteed gap from circle)
+    # 3. Format and Position Text (Centered All-Caps Fact Details)
+    # Combine headline and hook into a single block of uppercase text
+    if hook_text:
+        combined_text = f"{headline} {hook_text}".upper()
+    else:
+        combined_text = headline.upper()
+        
+    # Sanitize combined text
+    combined_text = combined_text.replace("’", "'").replace("“", '"').replace("”", '"')
+    combined_text = re.sub(r'[^\x00-\x7F*]+', '', combined_text)
+    
+    # Revert to first design font size selection logic
+    headline_length = len(combined_text)
+    if headline_length < 40:
+        font_size = 110
+    elif headline_length < 70:
+        font_size = 85
+    elif headline_length < 100:
+        font_size = 68
+    else:
+        font_size = 54
+        
+    text_font = get_font("anton", size=font_size)
+    
+    margin = 50
+    max_text_width = base_width - (margin * 2)
+    
+    # Measure text block height
+    text_total_height = render_multicolor_text_centered(draw, combined_text, 0, text_font, max_text_width, base_width, dry_run=True)
+    
+    # Bottom margin padding is exactly 60px
+    bottom_padding = 60
+    
+    # Position Elements (Bottom-aligned)
+    text_start_y = base_height - bottom_padding - text_total_height
+    
+    # Paste uploaded logo banner image above the text if it exists
+    banner_path = "assets/logo/banner.png"
+    if os.path.exists(banner_path):
+        try:
+            banner = Image.open(banner_path).convert("RGBA")
+            bw, bh = banner.size
+            new_bw = 500
+            new_bh = int(bh * (new_bw / bw))
+            banner = banner.resize((new_bw, new_bh), Image.Resampling.LANCZOS)
+            
+            bx = int((base_width - new_bw) // 2)
+            by = int(text_start_y - new_bh - 25)
+            base_img.paste(banner, (bx, by), banner)
+        except Exception as e:
+            logging.error(f"Failed to load user banner logo: {e}")
+            
+    # Draw the text
     render_multicolor_text_centered(draw, combined_text, text_start_y, text_font, max_text_width, base_width)
     
-    # 4. Draw Divider Line & Centered Logo at the very bottom
-    bottom_line_y = 1300
-    draw.line([(40, bottom_line_y), (base_width - 40, bottom_line_y)], fill="#FFFFFF", width=2)
-    
-    # Center logo badge on bottom line
-    avatar_size = 80
-    if os.path.exists(logo_path):
-        try:
-            avatar_img = Image.open(logo_path).convert("RGBA")
-            avatar_img = center_crop(avatar_img, avatar_size, avatar_size)
-            
-            mask_avatar = Image.new('L', (avatar_size, avatar_size), 0)
-            draw_mask_avatar = ImageDraw.Draw(mask_avatar)
-            draw_mask_avatar.ellipse((0, 0, avatar_size, avatar_size), fill=255)
-            
-            circular_avatar = Image.new('RGBA', (avatar_size, avatar_size), (0,0,0,0))
-            circular_avatar.paste(avatar_img, (0,0), mask_avatar)
-            
-            # White border around logo avatar
-            draw_avatar_border = ImageDraw.Draw(circular_avatar)
-            draw_avatar_border.ellipse((0, 0, avatar_size, avatar_size), outline="#FFFFFF", width=2)
-            
-            ax = (base_width - avatar_size) // 2
-            ay = bottom_line_y - avatar_size // 2
-            base_img.paste(circular_avatar, (ax, ay), circular_avatar)
-        except Exception as e:
-            logging.error(f"Failed to draw bottom circular avatar: {e}")
-            
     # Ensure output directory exists
     dir_name = os.path.dirname(output_path)
     if dir_name:
