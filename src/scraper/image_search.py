@@ -25,6 +25,13 @@ def get_bing_image(query, avoid_url=None):
             # Clean backslashes and HTML entities if any
             u_clean = urllib.parse.unquote(u.replace("\\", ""))
             if u_clean.startswith("http") and u_clean != avoid_url:
+                # Filter out generic diagrams, charts, vectors, icons
+                u_lower = u_clean.lower()
+                if any(x in u_lower for x in ["chart", "diagram", "psychrometric", "blueprint", "graph", "vector", "icon", "placeholder"]):
+                    continue
+                # Skip known bad facebook lookaside or tracking URLs that yield binary/corrupted responses
+                if "lookaside.fbsbx.com" in u_lower:
+                    continue
                 logging.info(f"Found related image on Bing: {u_clean}")
                 return u_clean
     except Exception as e:
@@ -52,11 +59,16 @@ def get_related_image(keyword, avoid_url=None):
                 region="wt-wt",
                 safesearch="moderate",
                 size="Large",
-                max_results=5
+                max_results=10
             ))
             for res in results:
                 img_url = res.get('image')
                 if img_url and img_url != avoid_url:
+                    img_url_lower = img_url.lower()
+                    if any(x in img_url_lower for x in ["chart", "diagram", "psychrometric", "blueprint", "graph", "vector", "icon", "placeholder"]):
+                        continue
+                    if "lookaside.fbsbx.com" in img_url_lower:
+                        continue
                     logging.info(f"Found related image on DDG: {img_url}")
                     return img_url
     except Exception as e:
