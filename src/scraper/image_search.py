@@ -40,39 +40,13 @@ def get_bing_image(query, avoid_url=None):
 
 def get_related_image(keyword, avoid_url=None):
     """
-    Searches for an image related to the keyword.
-    Tries DuckDuckGo first (with simplification), and falls back to Bing Images if rate-limited.
+    Generates a related image using Pollinations AI (Flux model).
     """
+    import urllib.parse
     clean_keyword = re.sub(r"[‘’“”\"']", "", keyword)
-    words = [w for w in clean_keyword.split() if w]
-    stop_words = {"to", "joins", "star", "in", "for", "gets", "with", "from", "on", "at", "by", "of", "and", "a", "an", "the", "about", "set", "is", "are", "was", "were", "to", "star", "direct", "talks"}
-    filtered_words = [w for w in words if w.lower() not in stop_words]
-    query = " ".join(filtered_words[:4]) if len(filtered_words) > 4 else " ".join(filtered_words)
-    
-    logging.info(f"Searching for related image using query: '{query}'")
-    
-    # Try DuckDuckGo
-    try:
-        with DDGS() as ddgs:
-            results = list(ddgs.images(
-                query,
-                region="wt-wt",
-                safesearch="moderate",
-                size="Large",
-                max_results=10
-            ))
-            for res in results:
-                img_url = res.get('image')
-                if img_url and img_url != avoid_url:
-                    img_url_lower = img_url.lower()
-                    if any(x in img_url_lower for x in ["chart", "diagram", "psychrometric", "blueprint", "graph", "vector", "icon", "placeholder"]):
-                        continue
-                    if "lookaside.fbsbx.com" in img_url_lower:
-                        continue
-                    logging.info(f"Found related image on DDG: {img_url}")
-                    return img_url
-    except Exception as e:
-        logging.warning(f"DuckDuckGo image search failed: {e}. Falling back to Bing Search...")
-        
-    # Fallback to Bing Search
-    return get_bing_image(query, avoid_url)
+    # Build a clean prompt for image generation
+    prompt = f"realistic professional photo of {clean_keyword}, high quality celebrity portrait, cinematic lighting, 8k resolution"
+    encoded_prompt = urllib.parse.quote(prompt)
+    image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=512&height=512&nologo=true&private=true"
+    logging.info(f"Generated AI image URL using Pollinations.ai: {image_url}")
+    return image_url

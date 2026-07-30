@@ -45,7 +45,12 @@ jobs:
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
-        git add output/processed_news.txt
+        git add output/processed_news.txt || true
         # Only commit if there are changes
-        git diff --quiet && git diff --staged --quiet || git commit -m "Auto-update processed news list"
-        git push
+        if ! git diff --quiet || ! git diff --staged --quiet; then
+          git commit -m "Auto-update processed news list"
+          git pull --rebase origin main
+          git push origin HEAD:main
+        else
+          echo "No changes in processed news history."
+        fi
