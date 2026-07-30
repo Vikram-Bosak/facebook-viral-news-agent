@@ -290,29 +290,87 @@ def create_facebook_post(image_url, image_url_2, headline, source_name="IGN", ou
         draw_temp = ImageDraw.Draw(base_img)
         draw_temp.line([(w1, 0), (w1, base_height)], fill="#000000", width=4)
     elif img1:
-        # Full screen background image (slightly blurred)
-        img1_blurred = img1.filter(ImageFilter.GaussianBlur(3))
-        img1_cropped = center_crop(img1_blurred, base_width, base_height)
+        # Full screen background image (NO BLUR as requested)
+        img1_cropped = center_crop(img1, base_width, base_height)
         base_img.paste(img1_cropped, (0, 0))
     else:
         # Fallback empty
         pass
         
-    # Draw vertical gradient overlay from y=600 to y=1050 over the photo area
+    # 2. Format Text & Compute Dimensions first to know where the text container starts
+    if hook_text:
+        combined_text = f"{headline} {hook_text}".upper()
+    else:
+        combined_text = headline.upper()
+        
+    # Sanitize combined text
+    combined_text = combined_text.replace("’", "'").replace("“", '"').replace("”", '"')
+    combined_text = re.sub(r'[^\x00-\x7F*]+', '', combined_text)
+    
+    headline_length = len(combined_text)
+    if headline_length < 40:
+        font_size = 110
+    elif headline_length < 70:
+        font_size = 85
+    elif headline_length < 100:
+        font_size = 68
+    else:
+        font_size = 54
+        
+    # Temporary draw context for measurement
+    measure_draw = ImageDraw.Draw(base_img)
+    text_font = get_font("anton", size=font_size)
+    margin = 50
+    max_text_width = base_width - (margin * 2)
+    
+    # Measure text block height
+    text_total_height = render_multicolor_text_centered(measure_draw, combined_text, 0, text_font, max_text_width, base_width, dry_run=True)
+    bottom_padding = 60
+    text_start_y = base_height - bottom_padding - text_total_height
+    
+    # Determine the Y boundary for the text background area
+    banner_path = "assets/logo/banner.png"
+    banner_exists = os.path.exists(banner_path)
+    banner_y = text_start_y
+    if banner_exists:
+        try:
+            with Image.open(banner_path) as banner_img:
+                bw, bh = banner_img.size
+            new_bw = 500
+            new_bh = int(bh * (new_bw / bw))
+            banner_y = int(text_start_y - new_bh - 25)
+            bg_start_y = banner_y - 25
+        except Exception:
+            bg_start_y = text_start_y - 120
+    else:
+        bg_start_y = text_start_y - 45
+        
+    bg_start_y = max(600, bg_start_y)
+    
+    # 3. Create Frosted Glass / Light Blur Effect on the bottom container
+    bottom_box = (0, bg_start_y, base_width, base_height)
+    bottom_region = base_img.crop(bottom_box)
+    bottom_blurred = bottom_region.filter(ImageFilter.GaussianBlur(15)) # Light blur behind text
+    base_img.paste(bottom_blurred, (0, bg_start_y))
+    
+    # 4. Draw semi-transparent gradient + dark rectangle over the blurred area (retains visibility of image but ensures text readability)
     overlay = Image.new('RGBA', (base_width, base_height), (0,0,0,0))
-    draw_gradient(overlay, 600, 1050, color_start=(11,12,16,0), color_end=(11,12,16,255))
+    # Fade gradient from transparent to dark transparent
+    draw_gradient(overlay, bg_start_y - 150, bg_start_y, color_start=(11, 12, 16, 0), color_end=(11, 12, 16, 195))
+    # Solid dark semi-transparent rectangle for text
+    draw_overlay = ImageDraw.Draw(overlay)
+    draw_overlay.rectangle([(0, bg_start_y), (base_width, base_height)], fill=(11, 12, 16, 195))
+    
+    # Composite the overlay onto base_img
     base_img = Image.alpha_composite(base_img.convert('RGBA'), overlay).convert('RGB')
     
+    # Re-initialize draw context
     draw = ImageDraw.Draw(base_img)
     
-    # Draw solid black background for text area below y=1050
-    draw.rectangle([(0, 1050), (base_width, base_height)], fill="#0B0C10")
-    
-    # 2. Position Circular Badge completely inside the photo area (centered vertically in the photo zone)
-    # Only draw circle badge if circle_image_url is valid and not None
+    # 5. Position and Render Circular Badge (drawn on top of blurred region to remain perfectly sharp)
     if circle_image_url:
         badge_size = 300
-        pos_y = int(700 - badge_size // 2) # Centered at y=700 (ends at y=850, well above black zone at y=950)
+        pos_y = int(700 - badge_size // 2)
         
         # Check headline to alternate sides dynamically
         if len(headline) % 2 == 0:
@@ -330,60 +388,21 @@ def create_facebook_post(image_url, image_url_2, headline, source_name="IGN", ou
             pos_x=pos_x, 
             pos_y=pos_y
         )
-    
-    # 3. Format and Position Text (Centered All-Caps Fact Details)
-    # Combine headline and hook into a single block of uppercase text
-    if hook_text:
-        combined_text = f"{headline} {hook_text}".upper()
-    else:
-        combined_text = headline.upper()
         
-    # Sanitize combined text
-    combined_text = combined_text.replace("’", "'").replace("“", '"').replace("”", '"')
-    combined_text = re.sub(r'[^\x00-\x7F*]+', '', combined_text)
-    
-    # Revert to first design font size selection logic
-    headline_length = len(combined_text)
-    if headline_length < 40:
-        font_size = 110
-    elif headline_length < 70:
-        font_size = 85
-    elif headline_length < 100:
-        font_size = 68
-    else:
-        font_size = 54
-        
-    text_font = get_font("anton", size=font_size)
-    
-    margin = 50
-    max_text_width = base_width - (margin * 2)
-    
-    # Measure text block height
-    text_total_height = render_multicolor_text_centered(draw, combined_text, 0, text_font, max_text_width, base_width, dry_run=True)
-    
-    # Bottom margin padding is exactly 60px
-    bottom_padding = 60
-    
-    # Position Elements (Bottom-aligned)
-    text_start_y = base_height - bottom_padding - text_total_height
-    
-    # Paste uploaded logo banner image above the text if it exists
-    banner_path = "assets/logo/banner.png"
-    if os.path.exists(banner_path):
+    # 6. Draw Banner Logo if exists
+    if banner_exists:
         try:
             banner = Image.open(banner_path).convert("RGBA")
             bw, bh = banner.size
             new_bw = 500
             new_bh = int(bh * (new_bw / bw))
             banner = banner.resize((new_bw, new_bh), Image.Resampling.LANCZOS)
-            
             bx = int((base_width - new_bw) // 2)
-            by = int(text_start_y - new_bh - 25)
-            base_img.paste(banner, (bx, by), banner)
+            base_img.paste(banner, (bx, banner_y), banner)
         except Exception as e:
             logging.error(f"Failed to load user banner logo: {e}")
             
-    # Draw the text
+    # 7. Render Text
     render_multicolor_text_centered(draw, combined_text, text_start_y, text_font, max_text_width, base_width)
     
     # Ensure output directory exists
